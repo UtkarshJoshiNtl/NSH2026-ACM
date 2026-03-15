@@ -1,0 +1,10 @@
+# CMake
+backend/cpp/build/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
