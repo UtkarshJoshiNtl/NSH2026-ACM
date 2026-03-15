@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = -Dphysics_engine_EXPORTS
 
-CXX_INCLUDES = -I/home/Code1/dev/temp/ACM/backend/cpp -isystem /usr/include/python3.13 -isystem /home/Code1/dev/temp/ACM/venv/lib/python3.13/site-packages/pybind11/include
+CXX_INCLUDES = -I/home/Code1/dev/python/ACM/backend/cpp -isystem /usr/include/python3.13 -isystem /home/Code1/dev/python/ACM/venv/lib/python3.13/site-packages/pybind11/include
 
 CXX_FLAGS = -std=gnu++17 -fPIC -fvisibility=hidden -flto=auto -fno-fat-lto-objects
 
