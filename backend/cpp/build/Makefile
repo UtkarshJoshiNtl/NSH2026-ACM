@@ -153,6 +153,30 @@ fuel.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/physics_engine.dir/build.make CMakeFiles/physics_engine.dir/fuel.cpp.s
 .PHONY : fuel.cpp.s
 
+propagator.o: propagator.cpp.o
+.PHONY : propagator.o
+
+# target to build an object file
+propagator.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/physics_engine.dir/build.make CMakeFiles/physics_engine.dir/propagator.cpp.o
+.PHONY : propagator.cpp.o
+
+propagator.i: propagator.cpp.i
+.PHONY : propagator.i
+
+# target to preprocess a source file
+propagator.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/physics_engine.dir/build.make CMakeFiles/physics_engine.dir/propagator.cpp.i
+.PHONY : propagator.cpp.i
+
+propagator.s: propagator.cpp.s
+.PHONY : propagator.s
+
+# target to generate assembly for a file
+propagator.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/physics_engine.dir/build.make CMakeFiles/physics_engine.dir/propagator.cpp.s
+.PHONY : propagator.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -165,6 +189,9 @@ help:
 	@echo "... fuel.o"
 	@echo "... fuel.i"
 	@echo "... fuel.s"
+	@echo "... propagator.o"
+	@echo "... propagator.i"
+	@echo "... propagator.s"
 .PHONY : help
 
 

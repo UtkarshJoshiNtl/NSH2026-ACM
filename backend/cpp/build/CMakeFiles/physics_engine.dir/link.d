@@ -2,6 +2,7 @@ physics_engine.cpython-313-x86_64-linux-gnu.so: \
   /usr/lib/gcc/x86_64-linux-gnu/14/../../../x86_64-linux-gnu/crti.o \
   /usr/lib/gcc/x86_64-linux-gnu/14/crtbeginS.o \
   CMakeFiles/physics_engine.dir/fuel.cpp.o \
+  CMakeFiles/physics_engine.dir/propagator.cpp.o \
   /usr/lib/gcc/x86_64-linux-gnu/14/libstdc++.so \
   /usr/lib/gcc/x86_64-linux-gnu/14/../../../x86_64-linux-gnu/libm.so \
   /usr/lib/gcc/x86_64-linux-gnu/14/../../../x86_64-linux-gnu/libm.so \
@@ -32,6 +33,8 @@ physics_engine.cpython-313-x86_64-linux-gnu.so: \
 /usr/lib/gcc/x86_64-linux-gnu/14/crtbeginS.o:
 
 CMakeFiles/physics_engine.dir/fuel.cpp.o:
+
+CMakeFiles/physics_engine.dir/propagator.cpp.o:
 
 /usr/lib/gcc/x86_64-linux-gnu/14/libstdc++.so:
 

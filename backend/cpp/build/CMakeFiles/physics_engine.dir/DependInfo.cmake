@@ -9,6 +9,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/Code1/dev/python/ACM/backend/cpp/fuel.cpp" "CMakeFiles/physics_engine.dir/fuel.cpp.o" "gcc" "CMakeFiles/physics_engine.dir/fuel.cpp.o.d"
+  "/home/Code1/dev/python/ACM/backend/cpp/propagator.cpp" "CMakeFiles/physics_engine.dir/propagator.cpp.o" "gcc" "CMakeFiles/physics_engine.dir/propagator.cpp.o.d"
   "" "physics_engine.cpython-313-x86_64-linux-gnu.so" "gcc" "CMakeFiles/physics_engine.dir/link.d"
   )
 
