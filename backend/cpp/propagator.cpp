@@ -1,5 +1,7 @@
 #include "propagator.h"
 #include "fuel.h"
+#include "conjunction.h"
+#include "maneuver.h"
 #include <cmath>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -99,9 +101,9 @@ StateVector Propagator::propagate_steps(
 
 // ─── pybind11 bindings ───────────────────────────────────────────
 PYBIND11_MODULE(physics_engine, m) {
-    m.doc() = "ACM Physics Engine";
+    m.doc() = "ACM Physics Engine — Propagator, FuelTracker, ConjunctionDetector, ManeuverCalculator";
 
-    // Fuel tracker
+    // ── FuelTracker ─────────────────────────────────────────────
     py::class_<FuelTracker>(m, "FuelTracker")
         .def(py::init<double, double>(),
              py::arg("initial_fuel") = INITIAL_FUEL,
@@ -115,7 +117,7 @@ PYBIND11_MODULE(physics_engine, m) {
         .def_readwrite("fuel_kg",   &FuelTracker::fuel_kg)
         .def_readwrite("dry_mass",  &FuelTracker::dry_mass);
 
-    // Propagator
+    // ── Propagator ──────────────────────────────────────────────
     py::class_<Propagator>(m, "Propagator")
         .def(py::init<>())
         .def("propagate",       &Propagator::propagate)
@@ -123,4 +125,60 @@ PYBIND11_MODULE(physics_engine, m) {
              py::arg("state"),
              py::arg("total_seconds"),
              py::arg("step_size") = 10.0);
+
+    // ── ConjunctionWarning ──────────────────────────────────────
+    py::class_<ConjunctionWarning>(m, "ConjunctionWarning")
+        .def(py::init<>())
+        .def_readwrite("sat_id",                   &ConjunctionWarning::sat_id)
+        .def_readwrite("debris_id",                &ConjunctionWarning::debris_id)
+        .def_readwrite("current_distance",         &ConjunctionWarning::current_distance)
+        .def_readwrite("time_to_closest_approach", &ConjunctionWarning::time_to_closest_approach)
+        .def_readwrite("severity",                 &ConjunctionWarning::severity)
+        .def_readwrite("relative_velocity",        &ConjunctionWarning::relative_velocity)
+        .def("__repr__", [](const ConjunctionWarning& w){
+            return "<ConjunctionWarning sat=" + std::to_string(w.sat_id)
+                 + " debris=" + std::to_string(w.debris_id)
+                 + " dist=" + std::to_string(w.current_distance)
+                 + " km sev=" + w.severity + ">";
+        });
+
+    // ── ConjunctionDetector ─────────────────────────────────────
+    py::class_<ConjunctionDetector>(m, "ConjunctionDetector")
+        .def(py::init<>())
+        .def("detect",
+             &ConjunctionDetector::detect,
+             py::arg("sat_states"),
+             py::arg("debris_states"),
+             py::arg("lookahead_s") = 86400.0,
+             py::arg("step_s")      = 60.0,
+             "Find all conjunction warnings within lookahead window.\n"
+             "Returns list of ConjunctionWarning objects.");
+
+    // ── ManeuverPlan ────────────────────────────────────────────
+    py::class_<ManeuverPlan>(m, "ManeuverPlan")
+        .def(py::init<>())
+        .def_readwrite("evasion_dv_eci",       &ManeuverPlan::evasion_dv_eci)
+        .def_readwrite("recovery_dv_eci",      &ManeuverPlan::recovery_dv_eci)
+        .def_readwrite("fuel_cost_kg",         &ManeuverPlan::fuel_cost_kg)
+        .def_readwrite("burn_timing_offset_s", &ManeuverPlan::burn_timing_offset_s)
+        .def("__repr__", [](const ManeuverPlan& p){
+            auto& e = p.evasion_dv_eci;
+            auto& r = p.recovery_dv_eci;
+            double e_mag = std::sqrt(e[0]*e[0]+e[1]*e[1]+e[2]*e[2]);
+            double r_mag = std::sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
+            return "<ManeuverPlan evasion_dv=" + std::to_string(e_mag)
+                 + " km/s recovery_dv=" + std::to_string(r_mag)
+                 + " km/s fuel=" + std::to_string(p.fuel_cost_kg) + " kg>";
+        });
+
+    // ── ManeuverCalculator ──────────────────────────────────────
+    py::class_<ManeuverCalculator>(m, "ManeuverCalculator")
+        .def(py::init<>())
+        .def("calculate",
+             &ManeuverCalculator::calculate,
+             py::arg("sat_state"),
+             py::arg("warning"),
+             "Calculate optimal paired evasion+recovery burns.\n"
+             "Returns a ManeuverPlan with both burns in ECI frame.");
 }
+
