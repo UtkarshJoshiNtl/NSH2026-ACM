@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from backend.routers import telemetry, maneuver, simulate, visualization
+from backend.routers import telemetry, maneuver, simulate, visualization, history
 from backend.core.state_manager import state_mgr
 import json
 import os
@@ -18,6 +18,7 @@ app.include_router(telemetry.router, prefix="/api")
 app.include_router(maneuver.router, prefix="/api")
 app.include_router(simulate.router, prefix="/api")
 app.include_router(visualization.router, prefix="/api")
+app.include_router(history.router, prefix="/api")
 
 # Static files for frontend
 if os.path.exists("frontend"):

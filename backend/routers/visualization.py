@@ -14,6 +14,7 @@ async def get_snapshot():
             "id": sat.id,
             "lat": round(lat, 4),
             "lon": round(lon, 4),
+            "alt_km": round(alt, 1),
             "fuel_kg": round(sat.m_fuel, 2),
             "status": sat.status
         })
@@ -25,18 +26,30 @@ async def get_snapshot():
     if debris:
         r_array = np.array([d.r for d in debris])
         geo_array = vectorized_eci_to_geodetic(r_array, time_s=t_now)
-        
-        debris_cloud = []
-        for i, deb in enumerate(debris):
-            lat, lon, alt = geo_array[i]
-            debris_cloud.append([deb.id, round(float(lat), 3), round(float(lon), 3), round(float(alt), 1)])
+        debris_cloud = [
+            [deb.id, round(float(geo_array[i][0]), 3), round(float(geo_array[i][1]), 3), round(float(geo_array[i][2]), 1)]
+            for i, deb in enumerate(debris)
+        ]
     else:
         debris_cloud = []
+
+    # Expose pending burns for Gantt chart
+    pending_burns = [
+        {
+            "burn_id":      b.burn_id,
+            "satellite_id": b.satellite_id,
+            "burn_type":    b.burn_type,
+            "burn_time":    b.burn_time,
+        }
+        for b in state_mgr.scheduled_maneuvers if not b.executed
+    ]
 
     return {
         "timestamp": state_mgr.simulation_time,
         "satellites": satellites_out,
         "debris_cloud": debris_cloud,
         "active_cdms": state_mgr.active_cdms[:20],
-        "ground_stations": get_all_stations()
+        "ground_stations": get_all_stations(),
+        "pending_burns": pending_burns[:50],
+        "history_count": len(state_mgr.maneuver_history),
     }
