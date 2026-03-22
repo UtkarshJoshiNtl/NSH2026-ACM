@@ -148,6 +148,11 @@ def check_los(r_eci: list) -> bool:
     return False
 
 
+def get_all_stations() -> list[dict]:
+    """Returns list of all ground stations for visualization."""
+    return _GROUND_STATIONS
+
+
 def visible_stations(r_eci: list) -> list[str]:
     """Returns list of station IDs currently visible to the satellite."""
     lat, lon, alt = eci_to_geodetic(r_eci)

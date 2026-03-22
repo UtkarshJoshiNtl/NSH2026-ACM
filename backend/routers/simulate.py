@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from backend.core.state_manager import state_mgr
 from backend.core.physics_bridge import propagate, compute_fuel_used
 from backend.core.maneuver_planner import apply_burn
+from backend.core.station_keeping import check_all_slots
 import math
 
 router = APIRouter()
@@ -23,12 +24,15 @@ async def simulate_step(req: StepRequest):
 
     # 2. Propagate ALL objects
     for obj in state_mgr.objects.values():
-        obj.r + obj.v # ensure we have state
-        new_state = propagate(obj.r + obj.v, dt)
+        state = obj.r + obj.v
+        new_state = propagate(state, dt)
         obj.r = new_state[:3]
         obj.v = new_state[3:]
 
-    # 3. Advance simulation time
+    # 3. Check station-keeping drift for all satellites
+    check_all_slots(state_mgr.get_all_satellites())
+
+    # 4. Advance simulation time
     state_mgr.advance_time(dt)
     
     return {

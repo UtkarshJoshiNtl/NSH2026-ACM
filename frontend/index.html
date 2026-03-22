@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ACM | Autonomous Constellation Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <span class="prefix">ACM</span>
+                <span class="status-dot"></span>
+                <span class="title">COLA ENGINE</span>
+            </div>
+            <div class="sim-controls">
+                <div class="stat">
+                    <span class="label">SIM TIME</span>
+                    <span id="sim-time" class="value">00:00:00</span>
+                </div>
+                <div class="stat">
+                    <span class="label">OBJECTS</span>
+                    <span id="obj-count" class="value">0</span>
+                </div>
+                <button id="step-btn" class="ctrl-btn">ADVANCE +1H</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="viz-panel">
+                <canvas id="viz-canvas"></canvas>
+                <div class="map-overlay">
+                    <div id="sat-count-overlay" class="overlay-box">SATELLITES: 0</div>
+                    <div id="deb-count-overlay" class="overlay-box">DEBRIS: 0</div>
+                </div>
+            </div>
+
+            <aside class="sidebar">
+                <section class="cdm-panel">
+                    <h3>ACTIVE CONJUNCTIONS</h3>
+                    <div id="cdm-list" class="scroll-list">
+                        <!-- CDM items will be injected here -->
+                        <div class="empty-msg">No active critical conjunctions.</div>
+                    </div>
+                </section>
+
+                <section class="telemetry-panel">
+                    <h3>CONSTELLATION STATUS</h3>
+                    <div id="sat-list" class="scroll-list">
+                        <!-- Satellite items will be injected here -->
+                    </div>
+                </section>
+            </aside>
+        </main>
+
+        <footer>
+            <div class="status-bar">
+                <span id="status-text">SYSTEM READY</span>
+                <span class="version">v1.2.0-nsh2026</span>
+            </div>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

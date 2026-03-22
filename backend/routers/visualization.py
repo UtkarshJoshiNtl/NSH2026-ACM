@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from backend.core.state_manager import state_mgr
-from backend.core.ground_station import eci_to_geodetic
+from backend.core.ground_station import eci_to_geodetic, get_all_stations
 
 router = APIRouter()
 
@@ -37,5 +37,6 @@ async def get_snapshot():
         "timestamp": state_mgr.simulation_time,
         "satellites": satellites_out,
         "debris_cloud": debris_cloud,
-        "active_cdms": state_mgr.active_cdms[:20]
+        "active_cdms": state_mgr.active_cdms[:20],
+        "ground_stations": get_all_stations()
     }
