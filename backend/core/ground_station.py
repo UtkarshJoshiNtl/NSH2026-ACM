@@ -9,6 +9,7 @@ import math
 import os
 import csv
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -47,18 +48,59 @@ def _load_stations() -> None:
 _load_stations()
 
 
-# ── ECI to geodetic (spherical, ignores sidereal rotation) ───────────────────
+OMEGA_E = 7.2921159e-5  # rad/s (Earth's rotation rate)
 
-def eci_to_geodetic(r_eci: list) -> tuple[float, float, float]:
+def eci_to_geodetic(r_eci: list, time_s: float = 0.0) -> tuple[float, float, float]:
     """
     Convert ECI [x,y,z] km to (lat_deg, lon_deg, alt_km).
-    Note: ignores Earth rotation (sufficient for LOS check approximation).
+    Accounts for Earth's rotation if time_s (sim time) is provided.
     """
     x, y, z = r_eci
-    lon_deg = math.degrees(math.atan2(y, x))
-    lat_deg = math.degrees(math.atan2(z, math.sqrt(x*x + y*y)))
+    # Sidereal rotation angle (approximate, starts at 0 RAAN)
+    theta = (OMEGA_E * time_s) % (2 * math.pi)
+    
+    # Position in ECEF (approximate rotation)
+    x_rot = x * math.cos(theta) + y * math.sin(theta)
+    y_rot = -x * math.sin(theta) + y * math.cos(theta)
+    
+    lon_deg = math.degrees(math.atan2(y_rot, x_rot))
+    lat_deg = math.degrees(math.atan2(z, math.sqrt(x_rot**2 + y_rot**2)))
     alt_km  = math.sqrt(x*x + y*y + z*z) - RE
+    
+    # Normalize lon to [-180, 180]
+    if lon_deg > 180: lon_deg -= 360
+    if lon_deg < -180: lon_deg += 360
+    
     return lat_deg, lon_deg, alt_km
+
+
+def vectorized_eci_to_geodetic(r_array: np.ndarray, time_s: float = 0.0) -> np.ndarray:
+    """
+    Vectorized version for thousands of objects, accounting for Earth rotation.
+    r_array: (N, 3) matrix of [x, y, z] km.
+    Returns: (N, 3) matrix of [lat_deg, lon_deg, alt_km].
+    """
+    x = r_array[:, 0]
+    y = r_array[:, 1]
+    z = r_array[:, 2]
+
+    # Sidereal rotation
+    theta = (OMEGA_E * time_s) % (2 * np.pi)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+    
+    # ECEF rotation
+    x_rot = x * cos_t + y * sin_t
+    y_rot = -x * sin_t + y * cos_t
+
+    lon_deg = np.degrees(np.arctan2(y_rot, x_rot))
+    r_xy = np.sqrt(x_rot**2 + y_rot**2)
+    lat_deg = np.degrees(np.arctan2(z, r_xy))
+    alt_km = np.sqrt(x**2 + y**2 + z**2) - RE
+
+    # Normalize longitude
+    lon_deg = (lon_deg + 180) % 360 - 180
+
+    return np.column_stack([lat_deg, lon_deg, alt_km])
 
 
 # ── Elevation angle from ground station to satellite ─────────────────────────
