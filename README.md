@@ -35,6 +35,35 @@ ACM/
 
 **Constants**: μ = 398600.4418 km³/s², Rₑ = 6378.137 km, J₂ = 1.08263×10⁻³
 
+## 🐳 Docker Deployment (NSH 2026 Phase 6 Compliance)
+
+The application is containerized for consistent deployment across environments.
+
+### 1. Build the Image
+```bash
+docker build -t acm-nsh2026 .
+```
+
+### 2. Run the Container
+```bash
+docker run -p 8000:8000 acm-nsh2026
+```
+
+### 3. Verification
+Once the container is running, access the dashboard at:
+**[http://localhost:8000](http://localhost:8000)**
+
+---
+
+## 🛠 Features (Alpha v2.0)
+- **Autonomous COLA Loop**: Real-time C++ physics-driven conjunction detection and evasion.
+- **Multi-Panel Dashboard**: 
+  - **Ground Track**: Real-time map with 10k+ debris objects.
+  - **Risk Bullseye**: Polar plot for immediate conjunction assessment.
+  - **Fuel Heatmap**: Critical fuel status tracking for all satellites.
+  - **Gantt Timeline**: Maneuver schedule and execution windows.
+- **Maneuver History**: Complete log of executed burns via `/api/history/maneuvers`.
+
 ## Quick Start
 
 ### Local (with venv)

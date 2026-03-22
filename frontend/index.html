@@ -1,67 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACM | Autonomous Constellation Manager</title>
+    <title>ACM | Orbital Insight Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
-    <div class="app-container">
-        <header>
-            <div class="logo">
-                <span class="prefix">ACM</span>
-                <span class="status-dot"></span>
-                <span class="title">COLA ENGINE</span>
+    <div class="app">
+
+        <!-- ── Header ── -->
+        <header id="header">
+            <div class="brand">
+                <span class="brand-prefix">ACM</span>
+                <div class="status-dot" id="status-dot"></div>
+                <span class="brand-sub">ORBITAL INSIGHT</span>
             </div>
-            <div class="sim-controls">
-                <div class="stat">
-                    <span class="label">SIM TIME</span>
-                    <span id="sim-time" class="value">00:00:00</span>
+            <div class="header-stats">
+                <div class="hstat"><span class="hlabel">SIM TIME</span><span class="hval" id="sim-time">—</span></div>
+                <div class="hstat"><span class="hlabel">SATELLITES</span><span class="hval" id="h-sat-count">0</span>
                 </div>
-                <div class="stat">
-                    <span class="label">OBJECTS</span>
-                    <span id="obj-count" class="value">0</span>
+                <div class="hstat"><span class="hlabel">DEBRIS</span><span class="hval" id="h-deb-count">0</span></div>
+                <div class="hstat"><span class="hlabel">CDMS</span><span class="hval danger" id="h-cdm-count">0</span>
                 </div>
-                <button id="step-btn" class="ctrl-btn">ADVANCE +1H</button>
+                <div class="hstat"><span class="hlabel">BURNS</span><span class="hval success"
+                        id="h-burn-count">0</span></div>
+            </div>
+            <div class="header-controls">
+                <button id="btn-step" class="ctrl-btn primary">▶ +1H</button>
+                <button id="btn-step-10" class="ctrl-btn">▶▶ +10H</button>
+                <button id="btn-cola" class="ctrl-btn accent">⚡ RUN COLA</button>
             </div>
         </header>
 
-        <main>
-            <div class="viz-panel">
-                <canvas id="viz-canvas"></canvas>
-                <div class="map-overlay">
-                    <div id="sat-count-overlay" class="overlay-box">SATELLITES: 0</div>
-                    <div id="deb-count-overlay" class="overlay-box">DEBRIS: 0</div>
+        <!-- ── Main Layout ── -->
+        <main id="main-grid">
+
+            <!-- LEFT: Map + Bullseye -->
+            <section class="panel" id="panel-left">
+                <div class="panel-tabs">
+                    <button class="tab active" data-tab="map">GROUND TRACK</button>
+                    <button class="tab" data-tab="bullseye">CONJUNCTION BULLSEYE</button>
                 </div>
-            </div>
-
-            <aside class="sidebar">
-                <section class="cdm-panel">
-                    <h3>ACTIVE CONJUNCTIONS</h3>
-                    <div id="cdm-list" class="scroll-list">
-                        <!-- CDM items will be injected here -->
-                        <div class="empty-msg">No active critical conjunctions.</div>
+                <div class="tab-content active" id="tab-map">
+                    <div class="canvas-wrapper">
+                        <canvas id="map-canvas"></canvas>
+                        <div class="map-overlay-badges">
+                            <span class="badge" id="badge-sats">SAT: 0</span>
+                            <span class="badge" id="badge-deb">DEB: 0</span>
+                            <span class="badge danger" id="badge-cdm">CDM: 0</span>
+                        </div>
                     </div>
-                </section>
-
-                <section class="telemetry-panel">
-                    <h3>CONSTELLATION STATUS</h3>
-                    <div id="sat-list" class="scroll-list">
-                        <!-- Satellite items will be injected here -->
+                </div>
+                <div class="tab-content" id="tab-bullseye">
+                    <div class="canvas-wrapper">
+                        <canvas id="bullseye-canvas"></canvas>
+                        <div class="bullseye-legend">
+                            <span class="legend-dot critical"></span> CRITICAL &lt;100m
+                            <span class="legend-dot warning"></span> WARNING &lt;1km
+                            <span class="legend-dot watch"></span> WATCH &lt;5km
+                        </div>
+                        <div class="sat-selector">
+                            <label>SELECTED SAT:</label>
+                            <select id="sat-select">
+                                <option value="">— choose —</option>
+                            </select>
+                        </div>
                     </div>
-                </section>
-            </aside>
+                </div>
+            </section>
+
+            <!-- CENTER: Fuel Heatmap -->
+            <section class="panel" id="panel-center">
+                <div class="panel-header">FUEL STATUS</div>
+                <div id="fuel-list" class="fuel-grid"></div>
+            </section>
+
+            <!-- RIGHT: CDMs + History -->
+            <section class="panel" id="panel-right">
+                <div class="panel-tabs">
+                    <button class="tab active" data-tab="cdms">ACTIVE CDMS</button>
+                    <button class="tab" data-tab="history">BURN LOG</button>
+                </div>
+                <div class="tab-content active" id="tab-cdms">
+                    <div id="cdm-list" class="scroll-list"></div>
+                </div>
+                <div class="tab-content" id="tab-history">
+                    <div id="history-list" class="scroll-list"></div>
+                </div>
+            </section>
+
         </main>
 
-        <footer>
-            <div class="status-bar">
-                <span id="status-text">SYSTEM READY</span>
-                <span class="version">v1.2.0-nsh2026</span>
-            </div>
+        <!-- ── Bottom: Gantt Timeline ── -->
+        <section id="gantt-panel">
+            <div class="panel-header">MANEUVER TIMELINE <span id="gantt-window">±2h window</span></div>
+            <canvas id="gantt-canvas"></canvas>
+        </section>
+
+        <!-- ── Footer ── -->
+        <footer id="footer">
+            <span id="status-text">SYSTEM READY</span>
+            <span class="footer-sep">|</span>
+            <span>NSH2026 · ACM · IIT Delhi</span>
+            <span class="footer-sep">|</span>
+            <span>v2.0.0-alpha</span>
         </footer>
+
     </div>
-    <script src="app.js"></script>
+    <script src="groundtrack.js"></script>
+    <script src="bullseye.js"></script>
+    <script src="fuel.js"></script>
+    <script src="gantt.js"></script>
+    <script src="main.js"></script>
 </body>
+
 </html>

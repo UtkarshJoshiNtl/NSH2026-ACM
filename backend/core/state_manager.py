@@ -50,6 +50,7 @@ class StateManager:
         self.simulation_time: float = time.time()       # current sim Unix timestamp
         self.scheduled_maneuvers: List[ScheduledBurn] = []
         self.active_cdms: List[dict] = []               # conjunction data messages
+        self.maneuver_history: List[dict] = []          # executed burn log
 
     # ── Object management ──────────────────────────────────────────────────────
 
@@ -105,6 +106,18 @@ class StateManager:
                     remaining.append(b)
             self.scheduled_maneuvers = remaining
             return due
+
+    def log_executed_burn(self, burn: ScheduledBurn, fuel_used: float) -> None:
+        """Record an executed burn to the history log."""
+        with self._lock:
+            self.maneuver_history.append({
+                "burn_id":      burn.burn_id,
+                "satellite_id": burn.satellite_id,
+                "burn_type":    burn.burn_type,
+                "burn_time":    burn.burn_time,
+                "delta_v":      burn.delta_v,
+                "fuel_used_kg": round(fuel_used, 4),
+            })
 
     # ── CDM store ──────────────────────────────────────────────────────────────
 

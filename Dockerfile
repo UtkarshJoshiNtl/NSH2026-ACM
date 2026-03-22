@@ -2,37 +2,38 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System deps
+# System dependencies as per NSH 2026 Spec
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \
-    python3-dev \
     g++ \
     cmake \
     make \
+    python3-dev \
+    pybind11-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python deps (includes pybind11 via pip)
+# Install Python deps
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Compile C++ physics engine
+# Compile C++ physics engine (backend/cpp/ in our repo)
 COPY backend/cpp/ ./backend/cpp/
 RUN mkdir -p ./backend/cpp/build && \
     cd ./backend/cpp/build && \
-    cmake \
-      -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir) \
-      -DPython3_EXECUTABLE=$(which python3) \
-      .. && \
+    cmake .. && \
     make -j4
 
-# Copy everything else
-COPY . .
-
-# Make the .so accessible from project root
+# Copy the compiled .so to root for Python to find easily
 RUN cp backend/cpp/build/physics_engine*.so /app/
 
+# Copy all project files
+COPY . .
+
+# Expose port 8000
 EXPOSE 8000
-CMD ["python3", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Start command as per Spec
+CMD ["python3", "backend/main.py"]
