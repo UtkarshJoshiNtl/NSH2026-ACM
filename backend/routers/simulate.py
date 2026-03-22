@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from backend.core.state_manager import state_mgr
-from backend.core.physics_bridge import propagate, compute_fuel_used
+from backend.core.physics_bridge import propagate
 from backend.core.maneuver_planner import apply_burn
 from backend.core.station_keeping import check_all_slots
 
@@ -22,8 +22,12 @@ async def simulate_step(req: StepRequest):
             fuel_used = apply_burn(sat, burn.delta_v, burn.burn_time)
             state_mgr.log_executed_burn(burn, fuel_used)
 
-    # 2. Propagate ALL objects
-    for obj in state_mgr.objects.values():
+    # 2. Propagate ALL objects (snapshot IDs first to avoid mutation race)
+    all_ids = list(state_mgr.objects.keys())
+    for obj_id in all_ids:
+        obj = state_mgr.objects.get(obj_id)
+        if obj is None:
+            continue
         state = obj.r + obj.v
         new_state = propagate(state, dt)
         obj.r = new_state[:3]

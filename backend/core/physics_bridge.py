@@ -104,15 +104,19 @@ def propagate_steps(state: list, total_seconds: float, step_size: float = 10.0) 
 def compute_fuel_used(m_current_kg: float, dv_kms: float) -> float:
     """
     Tsiolkovsky: propellant mass consumed for delta-v in km/s.
+    m_current_kg is the total wet mass (dry + remaining fuel).
     Uses C++ FuelTracker if available.
     """
     if dv_kms <= 0:
         return 0.0
     if _physics:
-        ft = _physics.FuelTracker(m_current_kg - DRY_MASS, DRY_MASS)
+        fuel_mass = max(0.0, m_current_kg - DRY_MASS)   # guard: never negative
+        if fuel_mass == 0.0:
+            return 0.0
+        ft = _physics.FuelTracker(fuel_mass, DRY_MASS)
         return ft.calculate_fuel_cost(dv_kms)
-    # Pure-Python fallback
-    ve = ISP * G0   # exhaust velocity km/s
+    # Pure-Python fallback (Tsiolkovsky)
+    ve = ISP * G0   # exhaust velocity in km/s
     return m_current_kg * (1.0 - math.exp(-dv_kms / ve))
 
 
