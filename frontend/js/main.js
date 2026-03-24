@@ -5,7 +5,7 @@
 import { state, updateState, onStateChange } from './state.js';
 import { fetchSnapshot, fetchHistory } from './api.js';
 import { initEvents, populateSatSelect } from './events.js';
-import { setText } from './utils/dom.js';
+import { setText, getEl } from './utils/dom.js';
 
 // Renderers
 import { updateHeader } from './renderers/header.js';
