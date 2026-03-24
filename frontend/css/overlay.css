@@ -1,0 +1,44 @@
+/* ── Loading Overlay ────────────────────────── */
+.overlay {
+    position: fixed;
+    top: 56px;
+    /* Below header */
+    left: 0;
+    width: 100%;
+    height: calc(100% - 56px);
+    background: rgba(8, 12, 16, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    transition: opacity 0.5s, visibility 0.5s;
+}
+
+.overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.overlay-text {
+    font-size: 0.8rem;
+    color: var(--accent);
+    letter-spacing: 2px;
+}

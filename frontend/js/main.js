@@ -58,14 +58,29 @@ async function bootstrap() {
         status: snapshot ? 'TELEMETRY LINK ACTIVE — LIVE' : 'OFFLINE (SERVER ERROR)'
     });
 
-    // Polling loops with overlap protection
+    // Hide loading overlay
+    const overlay = getEl('loading-overlay');
+    if (overlay) overlay.classList.add('hidden');
+
+    // Polling loops with overlap protection and stale detection
+    let lastUpdate = Date.now();
     let isFetchingSnapshot = false;
+
+    setInterval(() => {
+        if (Date.now() - lastUpdate > 10000) {
+            updateState({ status: 'TELEMETRY LINK DEGRADED — STALE DATA' });
+        }
+    }, 1000);
+
     setInterval(async () => {
         if (isFetchingSnapshot) return;
         isFetchingSnapshot = true;
         try {
             const snapshot = await fetchSnapshot();
-            if (snapshot) updateState({ snapshot });
+            if (snapshot) {
+                updateState({ snapshot });
+                lastUpdate = Date.now();
+            }
         } finally {
             isFetchingSnapshot = false;
         }
