@@ -9,7 +9,7 @@ export function renderCdmList(cdms) {
     if (!container) return;
 
     if (!cdms || cdms.length === 0) {
-        container.innerHTML = '<div class="empty-msg">NO ACTIVE CONJUNCTIONS</div>';
+        container.innerHTML = '<div class="empty-msg">NO ACTIVE CONJUNCTIONS — ALL CLEAR</div>';
         return;
     }
 

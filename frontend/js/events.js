@@ -59,9 +59,14 @@ export function initEvents() {
     }
 }
 
+let lastSatsJson = '';
 export function populateSatSelect(satellites) {
     const satSelect = getEl('sat-select');
     if (!satSelect || !satellites) return;
+
+    const satsJson = JSON.stringify(satellites.map(s => s.id).sort());
+    if (satsJson === lastSatsJson) return;
+    lastSatsJson = satsJson;
 
     const current = satSelect.value;
     satSelect.innerHTML = '<option value="">— choose —</option>' +

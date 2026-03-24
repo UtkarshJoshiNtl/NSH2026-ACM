@@ -55,8 +55,11 @@
 .empty-msg {
     color: var(--muted);
     text-align: center;
-    padding: 20px;
+    padding: 3rem 1rem;
     font-size: 0.65rem;
+    letter-spacing: 2px;
+    opacity: 0.5;
+    text-transform: uppercase;
 }
 
 /* ── History items ───────────────────────────── */

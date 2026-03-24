@@ -9,7 +9,7 @@ export function renderHistoryList(history) {
     if (!container) return;
 
     if (!history || history.length === 0) {
-        container.innerHTML = '<div class="empty-msg">NO RECENT EVENTS</div>';
+        container.innerHTML = '<div class="empty-msg">NO RECENT EVENTS — SIMULATION START</div>';
         return;
     }
 
