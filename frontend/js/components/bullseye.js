@@ -2,10 +2,19 @@
  * bullseye.js — Polar conjunction risk plot for a selected satellite
  */
 
-const bullseyeCanvas = document.getElementById('bullseye-canvas');
-const bCtx = bullseyeCanvas.getContext('2d');
+import { getEl } from '../utils/dom.js';
 
-function renderBullseye(data, selectedSatId) {
+let bullseyeCanvas, bCtx;
+
+export function initBullseye(canvasId) {
+    bullseyeCanvas = getEl(canvasId);
+    if (!bullseyeCanvas) return;
+    bCtx = bullseyeCanvas.getContext('2d');
+}
+
+export function renderBullseye(data, selectedSatId) {
+    if (!bullseyeCanvas || !bCtx) return;
+
     const W = bullseyeCanvas.width = bullseyeCanvas.clientWidth;
     const H = bullseyeCanvas.height = bullseyeCanvas.clientHeight;
     const cx = W / 2, cy = H / 2;
@@ -48,15 +57,11 @@ function renderBullseye(data, selectedSatId) {
     // Plot CDMs for selected satellite
     const myCdms = (data.active_cdms || []).filter(c => c.sat_id === selectedSatId);
     const simNow = data.timestamp;
-    const horizon = 86400; // 24h in seconds
+    const horizon = 86400; // 24h
 
     myCdms.forEach((cdm, i) => {
-        // angle: use index * golden angle for even distribution when no bearing info
-        const angle = i * 2.399963 - Math.PI / 2; // ≈ golden angle in radians
-        // radial distance: map tca_s offset to ring radius
+        const angle = i * 2.399963 - Math.PI / 2;
         const tcaOffset = Math.max(0, (cdm.tca_s || simNow + 3600) - simNow);
-        const frac = Math.min(tcaOffset / horizon, 1.0);
-        const riskFrac = 1.0 - frac; // closer in time = further from centre
         const r = Math.min(cdm.distance_km < 0.1 ? maxR * 0.2
             : cdm.distance_km < 1.0 ? maxR * 0.55
                 : maxR * 0.85, maxR - 5);
@@ -68,7 +73,6 @@ function renderBullseye(data, selectedSatId) {
             : cdm.severity === 'WARNING' ? '#e3b341'
                 : '#58a6ff';
 
-        // Glow
         const g = bCtx.createRadialGradient(px, py, 0, px, py, 12);
         g.addColorStop(0, dot + 'aa'); g.addColorStop(1, 'transparent');
         bCtx.fillStyle = g;

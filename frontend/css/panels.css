@@ -1,0 +1,72 @@
+/* ── Tabs ────────────────────────────────────── */
+.panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.tab {
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--font);
+    font-size: 0.6rem;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: color 0.15s;
+}
+
+.tab.active {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+}
+
+.tab:hover:not(.active) {
+    color: var(--text);
+}
+
+.panel-header {
+    padding: 8px 14px;
+    font-size: 0.6rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 1px;
+    flex-shrink: 0;
+}
+
+.tab-content {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+}
+
+.tab-content.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Gantt Panel ─────────────────────────────── */
+#gantt-panel {
+    height: var(--gantt-h);
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+#gantt-panel .panel-header {
+    display: flex;
+    gap: 12px;
+}
+
+#gantt-window {
+    color: var(--accent);
+}
+
+#gantt-canvas {
+    flex: 1;
+    width: 100%;
+}

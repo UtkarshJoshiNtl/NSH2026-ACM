@@ -2,8 +2,9 @@
  * gantt.js — Maneuver timeline showing pending burns relative to sim time
  */
 
-const ganttCanvas = document.getElementById('gantt-canvas');
-const gCtx = ganttCanvas.getContext('2d');
+import { getEl } from '../utils/dom.js';
+
+let ganttCanvas, gCtx;
 
 const WINDOW_S = 7200; // show ±2h
 const BURN_TYPE_COLORS = {
@@ -14,7 +15,15 @@ const BURN_TYPE_COLORS = {
     DEFAULT: '#8b949e',
 };
 
-function renderGantt(pendingBurns, simTime) {
+export function initGantt(canvasId) {
+    ganttCanvas = getEl(canvasId);
+    if (!ganttCanvas) return;
+    gCtx = ganttCanvas.getContext('2d');
+}
+
+export function renderGantt(pendingBurns, simTime) {
+    if (!ganttCanvas || !gCtx) return;
+
     const W = ganttCanvas.width = ganttCanvas.clientWidth;
     const H = ganttCanvas.height = ganttCanvas.clientHeight;
 
@@ -27,8 +36,7 @@ function renderGantt(pendingBurns, simTime) {
         return;
     }
 
-    // Grid time ticks
-    const tickIntervals = [600, 1800, 3600]; // 10min, 30min, 1h
+    const tickIntervals = [600, 1800, 3600];
     const tickSec = tickIntervals.find(t => WINDOW_S / t <= 12) || 3600;
     const timeToX = t => ((t - simTime) / WINDOW_S + 0.5) * W;
 
@@ -41,7 +49,6 @@ function renderGantt(pendingBurns, simTime) {
         gCtx.fillText(label, x + 2, H - 2);
     }
 
-    // NOW line
     const nowX = timeToX(simTime);
     gCtx.strokeStyle = '#f0a500'; gCtx.lineWidth = 1.5;
     gCtx.setLineDash([4, 3]);
@@ -50,7 +57,6 @@ function renderGantt(pendingBurns, simTime) {
     gCtx.fillStyle = '#f0a500'; gCtx.font = '8px JetBrains Mono';
     gCtx.fillText('NOW', nowX + 3, 10);
 
-    // Group burns by satellite for row assignment
     const satRows = {};
     pendingBurns.forEach(b => {
         if (!(b.satellite_id in satRows)) satRows[b.satellite_id] = Object.keys(satRows).length;
@@ -64,16 +70,13 @@ function renderGantt(pendingBurns, simTime) {
         const y = 2 + row * rowH;
         const color = BURN_TYPE_COLORS[burn.burn_type] || BURN_TYPE_COLORS.DEFAULT;
 
-        // Burn block
         gCtx.fillStyle = color;
         gCtx.fillRect(x - 1, y, 12, rowH - 3);
 
-        // Cooldown shading (600s)
         const cooldownW = (600 / WINDOW_S) * W;
         gCtx.fillStyle = color + '33';
         gCtx.fillRect(x + 11, y, cooldownW, rowH - 3);
 
-        // Label
         gCtx.fillStyle = '#cdd9e5'; gCtx.font = '7px JetBrains Mono';
         gCtx.fillText(burn.satellite_id.slice(-5) + ' ' + (burn.burn_type || '').slice(0, 4), x + 14, y + rowH - 6);
     });
