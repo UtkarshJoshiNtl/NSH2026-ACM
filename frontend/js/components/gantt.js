@@ -21,9 +21,23 @@ export function initGantt(canvasId) {
     gCtx = ganttCanvas.getContext('2d');
 }
 
+let frameRequested = false;
+let lastArgs = null;
+
 export function renderGantt(pendingBurns, simTime) {
     if (!ganttCanvas || !gCtx) return;
+    lastArgs = { pendingBurns, simTime };
 
+    if (frameRequested) return;
+    frameRequested = true;
+
+    requestAnimationFrame(() => {
+        _drawGantt(lastArgs.pendingBurns, lastArgs.simTime);
+        frameRequested = false;
+    });
+}
+
+function _drawGantt(pendingBurns, simTime) {
     const W = ganttCanvas.width = ganttCanvas.clientWidth;
     const H = ganttCanvas.height = ganttCanvas.clientHeight;
 

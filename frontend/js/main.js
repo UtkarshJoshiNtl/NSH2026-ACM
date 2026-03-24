@@ -58,15 +58,29 @@ async function bootstrap() {
         status: snapshot ? 'TELEMETRY LINK ACTIVE — LIVE' : 'OFFLINE (SERVER ERROR)'
     });
 
-    // Polling loops
+    // Polling loops with overlap protection
+    let isFetchingSnapshot = false;
     setInterval(async () => {
-        const snapshot = await fetchSnapshot();
-        if (snapshot) updateState({ snapshot });
+        if (isFetchingSnapshot) return;
+        isFetchingSnapshot = true;
+        try {
+            const snapshot = await fetchSnapshot();
+            if (snapshot) updateState({ snapshot });
+        } finally {
+            isFetchingSnapshot = false;
+        }
     }, POLLING_INTERVALS.SNAPSHOT);
 
+    let isFetchingHistory = false;
     setInterval(async () => {
-        const history = await fetchHistory();
-        updateState({ history });
+        if (isFetchingHistory) return;
+        isFetchingHistory = true;
+        try {
+            const history = await fetchHistory();
+            updateState({ history });
+        } finally {
+            isFetchingHistory = false;
+        }
     }, POLLING_INTERVALS.HISTORY);
 }
 

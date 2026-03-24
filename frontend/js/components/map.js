@@ -26,9 +26,23 @@ function toXY(lat, lon, W, H) {
     };
 }
 
+let frameRequested = false;
+let lastData = null;
+
 export function renderMap(data) {
     if (!mapCanvas || !mapCtx || !data) return;
+    lastData = data;
 
+    if (frameRequested) return;
+    frameRequested = true;
+
+    requestAnimationFrame(() => {
+        _drawMap(lastData);
+        frameRequested = false;
+    });
+}
+
+function _drawMap(data) {
     const W = mapCanvas.width = mapCanvas.clientWidth;
     const H = mapCanvas.height = mapCanvas.clientHeight;
     const ctx = mapCtx;

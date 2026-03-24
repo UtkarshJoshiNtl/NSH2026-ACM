@@ -12,9 +12,23 @@ export function initBullseye(canvasId) {
     bCtx = bullseyeCanvas.getContext('2d');
 }
 
+let frameRequested = false;
+let lastArgs = null;
+
 export function renderBullseye(data, selectedSatId) {
     if (!bullseyeCanvas || !bCtx) return;
+    lastArgs = { data, selectedSatId };
 
+    if (frameRequested) return;
+    frameRequested = true;
+
+    requestAnimationFrame(() => {
+        _drawBullseye(lastArgs.data, lastArgs.selectedSatId);
+        frameRequested = false;
+    });
+}
+
+function _drawBullseye(data, selectedSatId) {
     const W = bullseyeCanvas.width = bullseyeCanvas.clientWidth;
     const H = bullseyeCanvas.height = bullseyeCanvas.clientHeight;
     const cx = W / 2, cy = H / 2;
