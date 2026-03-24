@@ -1,0 +1,99 @@
+/* ── Scroll lists ────────────────────────────── */
+.scroll-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.scroll-list::-webkit-scrollbar {
+    width: 3px;
+}
+
+.scroll-list::-webkit-scrollbar-thumb {
+    background: var(--border2);
+}
+
+/* ── CDM items ───────────────────────────────── */
+.cdm-item {
+    border-left: 3px solid var(--watch);
+    background: var(--bg3);
+    padding: 8px 10px;
+    margin-bottom: 5px;
+    font-size: 0.65rem;
+}
+
+.cdm-item.CRITICAL {
+    border-color: var(--critical);
+    background: #1a0c0c;
+}
+
+.cdm-item.WARNING {
+    border-color: var(--warning);
+    background: #1a1508;
+}
+
+.cdm-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+.cdm-sat {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.cdm-dist {
+    color: var(--text);
+}
+
+.cdm-sub {
+    color: var(--muted);
+    font-size: 0.6rem;
+}
+
+.empty-msg {
+    color: var(--muted);
+    text-align: center;
+    padding: 20px;
+    font-size: 0.65rem;
+}
+
+/* ── History items ───────────────────────────── */
+.hist-item {
+    border-left: 3px solid var(--success);
+    background: var(--bg3);
+    padding: 7px 10px;
+    margin-bottom: 4px;
+    font-size: 0.62rem;
+}
+
+.hist-item.EVASION {
+    border-color: var(--critical);
+}
+
+.hist-item.RECOVERY {
+    border-color: var(--watch);
+}
+
+.hist-item.GRAVEYARD {
+    border-color: var(--warning);
+}
+
+.hist-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.hist-sat {
+    color: var(--accent);
+}
+
+.hist-fuel {
+    color: var(--success);
+}
+
+.hist-sub {
+    color: var(--muted);
+}
