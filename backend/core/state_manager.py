@@ -64,6 +64,19 @@ class StateManager:
             debs  = len(self.objects) - sats
             return {"satellites": sats, "debris": debs, "total": len(self.objects)}
 
+    def get_summary(self) -> dict:
+        """Return a high-level summary of the current state."""
+        with self._lock:
+            sats = [o for o in self.objects.values() if o.obj_type == "SATELLITE"]
+            return {
+                "simulation_time": self.simulation_time,
+                "satellite_count": len(sats),
+                "debris_count": len(self.objects) - len(sats),
+                "active_cdms": len(self.active_cdms),
+                "scheduled_maneuvers": len(self.scheduled_maneuvers),
+                "executed_maneuvers": len(self.maneuver_history)
+            }
+
     # ── Maneuver queue ──────────────────────────────────────────────────────────
 
     def queue_burn(self, burn: ScheduledBurn) -> None:

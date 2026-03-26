@@ -6,7 +6,15 @@ from backend.core.state_manager import state_mgr
 import json
 import os
 import asyncio
+import logging
 from backend.core.auto_cola import autonomous_cola_loop
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("ACM-Backend")
 
 app = FastAPI(title="ACM — Autonomous Constellation Manager")
 
@@ -24,6 +32,15 @@ app.include_router(history.router, prefix="/api")
 if os.path.exists("frontend"):
     app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
+@app.get("/api/health")
+async def health_check():
+    """Service health and state summary."""
+    return {
+        "status": "healthy",
+        "version": "2.0.1",
+        "state": state_mgr.get_summary()
+    }
+
 @app.on_event("startup")
 async def startup_event():
     # Load initial state
@@ -36,15 +53,16 @@ async def startup_event():
         with open(debris_path, 'r') as f:
             debris = json.load(f)
         state_mgr.load_initial_state(sats, debris)
-        print(f"Loaded initial state: {len(sats)} sats, {len(debris)} debris")
+        logger.info(f"Loaded initial state: {len(sats)} sats, {len(debris)} debris")
     
     # Start background COLA loop
     async def cola_task():
+        logger.info("Starting background COLA service...")
         while True:
             try:
                 await autonomous_cola_loop()
             except Exception as e:
-                print(f"Error in COLA loop: {e}")
+                logger.error(f"Error in COLA loop: {e}", exc_info=True)
             await asyncio.sleep(60) # Run every minute
             
     asyncio.create_task(cola_task())
