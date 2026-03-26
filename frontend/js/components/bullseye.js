@@ -59,23 +59,23 @@ function _drawBullseye(data, selectedSatId) {
     bCtx.beginPath(); bCtx.moveTo(cx - maxR - 5, cy); bCtx.lineTo(cx + maxR + 5, cy); bCtx.stroke();
 
     // Centre satellite dot
+    bCtx.shadowBlur = 10; bCtx.shadowColor = '#f0a500';
     bCtx.fillStyle = '#f0a500';
     bCtx.beginPath(); bCtx.arc(cx, cy, 7, 0, Math.PI * 2); bCtx.fill();
+    bCtx.shadowBlur = 0;
+
     if (selectedSatId) {
-        bCtx.fillStyle = '#cdd9e5'; bCtx.font = '9px JetBrains Mono';
-        bCtx.fillText(selectedSatId, cx + 10, cy - 5);
+        bCtx.fillStyle = '#cdd9e5'; bCtx.font = 'bold 10px JetBrains Mono';
+        bCtx.fillText(selectedSatId, cx + 12, cy - 8);
     }
 
     if (!selectedSatId || !data) return;
 
     // Plot CDMs for selected satellite
     const myCdms = (data.active_cdms || []).filter(c => c.sat_id === selectedSatId);
-    const simNow = data.timestamp;
-    const horizon = 86400; // 24h
 
     myCdms.forEach((cdm, i) => {
         const angle = i * 2.399963 - Math.PI / 2;
-        const tcaOffset = Math.max(0, (cdm.tca_s || simNow + 3600) - simNow);
         const r = Math.min(cdm.distance_km < 0.1 ? maxR * 0.2
             : cdm.distance_km < 1.0 ? maxR * 0.55
                 : maxR * 0.85, maxR - 5);
@@ -99,10 +99,23 @@ function _drawBullseye(data, selectedSatId) {
         bCtx.fillText(`${cdm.distance_km.toFixed(3)}km`, px + 7, py + 4);
     });
 
+    // Success state if no threats
     if (myCdms.length === 0) {
-        bCtx.fillStyle = '#3fb950aa'; bCtx.font = '11px JetBrains Mono';
+        bCtx.fillStyle = '#1e2d1f';
+        bCtx.beginPath();
+        bCtx.roundRect(cx - 60, cy + maxR + 10, 120, 20, 4);
+        bCtx.fill();
+
+        bCtx.fillStyle = '#3fb950'; bCtx.font = 'bold 10px JetBrains Mono';
         bCtx.textAlign = 'center';
-        bCtx.fillText('NO ACTIVE THREATS', cx, cy + maxR + 22);
+        bCtx.fillText('STATUS: SECURE', cx, cy + maxR + 24);
         bCtx.textAlign = 'left';
     }
+
+    // Render Sync Info
+    const syncTime = new Date(data.timestamp * 1000).toLocaleTimeString([], { hour12: false });
+    bCtx.fillStyle = '#8b949e'; bCtx.font = '9px JetBrains Mono';
+    bCtx.textAlign = 'right';
+    bCtx.fillText(`SYNC: ${syncTime}`, W - 10, H - 10);
+    bCtx.textAlign = 'left';
 }
