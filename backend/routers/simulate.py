@@ -5,6 +5,8 @@ from backend.core.physics_bridge import propagate
 from backend.core.maneuver_planner import apply_burn
 from backend.core.station_keeping import check_all_slots
 
+from backend.core.auto_cola import autonomous_cola_loop
+
 router = APIRouter()
 
 class StepRequest(BaseModel):
@@ -45,3 +47,9 @@ async def simulate_step(req: StepRequest):
         "maneuvers_executed": len(due_burns),
         "history_count": len(state_mgr.maneuver_history),
     }
+
+@router.post("/simulate/cola")
+async def trigger_cola():
+    """Manually trigger a pass of the autonomous COLA loop."""
+    count = await autonomous_cola_loop()
+    return {"status": "COLA_PASS_COMPLETE", "maneuvers_scheduled": count}

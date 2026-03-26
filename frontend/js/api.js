@@ -4,42 +4,66 @@
 
 import { API_BASE } from './constants.js';
 
+/**
+ * apiFetch — Common fetch wrapper with error handling
+ */
+async function apiFetch(endpoint, options = {}) {
+    const url = `${API_BASE}${endpoint}`;
+    try {
+        const response = await fetch(url, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers,
+            },
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorBody || response.statusText}`);
+        }
+
+        return await response.json();
+    } catch (e) {
+        console.error(`API Fetch Error [${url}]:`, e);
+        throw e;
+    }
+}
+
 export async function fetchSnapshot() {
     try {
-        const r = await fetch(`${API_BASE}/simulate/snapshot`);
-        return await r.json();
+        return await apiFetch('/visualization/snapshot');
     } catch (e) {
-        console.error('Snapshot fetch failed:', e);
         return null;
     }
 }
 
 export async function fetchHistory() {
     try {
-        const r = await fetch(`${API_BASE}/history`);
-        return await r.json();
+        const data = await apiFetch('/history/maneuvers');
+        return data.records || [];
     } catch (e) {
-        console.error('History fetch failed:', e);
         return [];
     }
 }
 
 export async function stepSim(hours) {
     try {
-        const r = await fetch(`${API_BASE}/simulate/step?hours=${hours}`, { method: 'POST' });
-        return r.ok;
+        await apiFetch('/simulate/step', {
+            method: 'POST',
+            body: JSON.stringify({ step_seconds: hours * 3600 })
+        });
+        return true;
     } catch (e) {
-        console.error('Sim step failed:', e);
         return false;
     }
 }
 
 export async function runCola() {
     try {
-        const r = await fetch(`${API_BASE}/simulate/cola`, { method: 'POST' });
-        return r.ok;
+        await apiFetch('/simulate/cola', { method: 'POST' });
+        return true;
     } catch (e) {
-        console.error('COLA run failed:', e);
         return false;
     }
 }
