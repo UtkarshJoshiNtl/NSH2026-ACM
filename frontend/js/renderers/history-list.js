@@ -14,12 +14,12 @@ export function renderHistoryList(history) {
     }
 
     container.innerHTML = history.slice(0, 50).map(h => `
-        <div class="hist-item ${h.type || ''}">
+        <div class="hist-item ${h.burn_type || ''}">
             <div class="hist-header">
                 <span class="hist-sat">${h.satellite_id.slice(-6)}</span>
-                <span class="hist-fuel">-${h.fuel_spent_kg?.toFixed(2) || '0.00'} kg</span>
+                <span class="hist-fuel">-${h.fuel_used_kg?.toFixed(2) || '0.00'} kg</span>
             </div>
-            <div class="hist-sub">${h.message || h.type} @ ${new Date(h.timestamp * 1000).toISOString().slice(11, 19)}</div>
+            <div class="hist-sub">${h.burn_type} @ ${new Date(h.burn_time * 1000).toISOString().slice(11, 19)}</div>
         </div>
     `).join('');
 }
