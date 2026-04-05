@@ -3,8 +3,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from backend.routers import telemetry, maneuver, simulate, visualization, history
 from backend.core.state_manager import state_mgr
-import json
-import os
+from backend.loader import load_initial_state_from_disk
 import asyncio
 import logging
 from backend.core.auto_cola import autonomous_cola_loop
@@ -43,17 +42,8 @@ async def health_check():
 
 @app.on_event("startup")
 async def startup_event():
-    # Load initial state
-    sats_path = "data/initial_satellites.json"
-    debris_path = "data/initial_debris.json"
-    
-    if os.path.exists(sats_path) and os.path.exists(debris_path):
-        with open(sats_path, 'r') as f:
-            sats = json.load(f)
-        with open(debris_path, 'r') as f:
-            debris = json.load(f)
-        state_mgr.load_initial_state(sats, debris)
-        logger.info(f"Loaded initial state: {len(sats)} sats, {len(debris)} debris")
+    # Load initial state from disk (gracefully handles missing files)
+    load_initial_state_from_disk(state_mgr)
     
     # Start background COLA loop
     async def cola_task():
