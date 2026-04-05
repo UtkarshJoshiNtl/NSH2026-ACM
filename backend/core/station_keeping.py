@@ -10,10 +10,11 @@ import logging
 from typing import List, Tuple
 
 from backend.core.state_manager import ObjectState
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-SLOT_BOX_KM = 10.0   # km — max allowed drift from nominal slot
+SLOT_BOX_KM = settings.SLOT_BOX_KM
 
 
 def slot_drift(sat: ObjectState) -> float:

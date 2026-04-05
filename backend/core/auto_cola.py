@@ -20,10 +20,11 @@ from backend.core.maneuver_planner import (
 )
 from backend.core.ground_station import check_los
 from backend.core.physics_bridge import _vec_mag as vec_mag
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-EOL_INITIAL_FUEL = 50.0   # kg
+EOL_INITIAL_FUEL = settings.INITIAL_FUEL_KG
 
 
 async def autonomous_cola_loop(

@@ -14,12 +14,14 @@ from typing import Optional
 from backend.core import physics_bridge as phys
 from backend.core.ground_station import check_los
 from backend.core.state_manager import ObjectState, ScheduledBurn, state_mgr
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
-COOLDOWN_S   = 600.0   # s between burns on same sat
-MAX_DV_KMS   = 0.015   # km/s (15 m/s)
-EOL_FUEL_PCT = 0.05    # 5% of initial fuel
+# Use constants from config
+COOLDOWN_S   = settings.COOLDOWN_S
+MAX_DV_KMS   = settings.MAX_DV_KMS
+EOL_FUEL_PCT = settings.EOL_FUEL_PCT
 
 
 # ── Vector helpers ────────────────────────────────────────────────────────────
@@ -148,7 +150,7 @@ def apply_burn(sat: ObjectState, dv_vec: list, burn_time: float) -> float:
     sat.last_burn_time = burn_time
 
     # Check EOL
-    if sat.m_fuel / 50.0 < EOL_FUEL_PCT:
+    if sat.m_fuel / settings.INITIAL_FUEL_KG < EOL_FUEL_PCT:
         sat.status = "EOL"
     elif sat.status == "NOMINAL":
         pass
