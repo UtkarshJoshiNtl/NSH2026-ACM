@@ -14,11 +14,11 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag acm-nsh2026:latest
+      run: docker build . --file Dockerfile --tag astrosis:latest
 
     - name: Verify C++ Physics Engine (Check for .so)
       run: |
-        docker run --name test-container -d acm-nsh2026:latest
+        docker run --name test-container -d astrosis:latest
         docker exec test-container ls /app/physics_engine.cpython-310-x86_64-linux-gnu.so || \
         docker exec test-container ls /app/ | grep physics_engine
         docker stop test-container

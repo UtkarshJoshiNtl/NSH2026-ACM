@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System dependencies as per NSH 2026 Spec
+# System dependencies as per Astrosis Spec
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \

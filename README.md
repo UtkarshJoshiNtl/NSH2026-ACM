@@ -1,8 +1,8 @@
-# NSH 2026 — Autonomous Constellation Manager (ACM)
+# Astrosis — Autonomous Constellation Manager (ACM)
 
 ![Python](https://img.shields.io/badge/python-3.10-blue) ![C++](https://img.shields.io/badge/C%2B%2B-17-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green) ![Docker](https://img.shields.io/badge/Docker-ubuntu%3A22.04-orange)
 
-Autonomous satellite constellation manager with real-time conjunction assessment and collision avoidance, built for the **National Space Hackathon 2026** at IIT Delhi.
+Autonomous satellite constellation manager with real-time conjunction assessment and collision avoidance.
 
 ## Architecture
 
@@ -35,18 +35,18 @@ ACM/
 
 **Constants**: μ = 398600.4418 km³/s², Rₑ = 6378.137 km, J₂ = 1.08263×10⁻³
 
-## 🐳 Docker Deployment (NSH 2026 Phase 6 Compliance)
+## 🐳 Docker Deployment (Astrosis Compliance)
 
 The application is containerized for consistent deployment across environments.
 
 ### 1. Build the Image
 ```bash
-docker build -t acm-nsh2026 .
+docker build -t astrosis .
 ```
 
 ### 2. Run the Container
 ```bash
-docker run -p 8000:8000 acm-nsh2026
+docker run -p 8000:8000 astrosis
 ```
 
 ### 3. Verification
@@ -85,8 +85,8 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### Docker
 ```bash
-docker build -t acm-nsh2026 .
-docker run -p 8000:8000 acm-nsh2026
+docker build -t astrosis .
+docker run -p 8000:8000 astrosis
 ```
 
 ## API Endpoints

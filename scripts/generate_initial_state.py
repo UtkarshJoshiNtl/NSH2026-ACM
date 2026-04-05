@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-generate_initial_state.py — NSH 2026 ACM
+generate_initial_state.py — Astrosis
 Generate synthetic ECI state vectors for 55 satellites and 10,000 debris objects.
 
 Orbital mechanics used:

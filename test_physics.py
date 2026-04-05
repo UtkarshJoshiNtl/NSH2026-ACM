@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-test_physics.py  —  NSH2026-ACM Physics Engine Test Suite
+test_physics.py  —  Astrosis Physics Engine Test Suite
 ==========================================================
 Tests conjunction detection and maneuver planning via the physics_engine
 pybind11 module.  Run from the project root after building:
@@ -98,7 +98,7 @@ assert len(debris_states) == 100, "Expected 100 debris objects"
 # Test 1 — Conjunction Detection
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n" + "═" * 58)
-print("  TEST SUITE: NSH2026-ACM PHYSICS ENGINE")
+print("  TEST SUITE: Astrosis PHYSICS ENGINE")
 print("═" * 58)
 print("\n[1] Conjunction Detection")
 

@@ -14,9 +14,9 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("ACM-Backend")
+logger = logging.getLogger("Astrosis-Backend")
 
-app = FastAPI(title="ACM — Autonomous Constellation Manager")
+app = FastAPI(title="Astrosis — Orbital Intelligence API")
 
 # Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
