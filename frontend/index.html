@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Astrosis | Orbital Insight Dashboard</title>
+    <title>Astrosis | Satellite Physics Simulator</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap"
         rel="stylesheet">
@@ -18,33 +18,26 @@
             <div class="brand">
                 <span class="brand-prefix">Astrosis</span>
                 <div class="status-dot" id="status-dot"></div>
-                <span class="brand-sub">ORBITAL INSIGHT</span>
+                <span class="brand-sub">PHYSICS SIMULATOR</span>
             </div>
             <div class="header-stats">
                 <div class="hstat"><span class="hlabel">SIM TIME</span><span class="hval" id="sim-time">—</span></div>
-                <div class="hstat"><span class="hlabel">SATELLITES</span><span class="hval" id="h-sat-count">0</span>
-                </div>
+                <div class="hstat"><span class="hlabel">SATELLITES</span><span class="hval" id="h-sat-count">0</span></div>
                 <div class="hstat"><span class="hlabel">DEBRIS</span><span class="hval" id="h-deb-count">0</span></div>
-                <div class="hstat"><span class="hlabel">CDMS</span><span class="hval danger" id="h-cdm-count">0</span>
-                </div>
-                <div class="hstat"><span class="hlabel">BURNS</span><span class="hval success"
-                        id="h-burn-count">0</span></div>
             </div>
             <div class="header-controls">
                 <button id="btn-step" class="ctrl-btn primary">▶ +1H</button>
                 <button id="btn-step-10" class="ctrl-btn">▶▶ +10H</button>
-                <button id="btn-cola" class="ctrl-btn accent">⚡ RUN COLA</button>
             </div>
         </header>
 
         <!-- ── Main Layout ── -->
         <main id="main-grid">
 
-            <!-- LEFT: Map + Bullseye -->
+            <!-- Map Panel -->
             <section class="panel" id="panel-left">
                 <div class="panel-tabs">
                     <button class="tab active" data-tab="map">GROUND TRACK</button>
-                    <button class="tab" data-tab="bullseye">CONJUNCTION BULLSEYE</button>
                 </div>
                 <div class="tab-content active" id="tab-map">
                     <div class="canvas-wrapper">
@@ -52,69 +45,26 @@
                         <div class="map-overlay-badges">
                             <span class="badge" id="badge-sats">SAT: 0</span>
                             <span class="badge" id="badge-deb">DEB: 0</span>
-                            <span class="badge danger" id="badge-cdm">CDM: 0</span>
                         </div>
                     </div>
-                </div>
-                <div class="tab-content" id="tab-bullseye">
-                    <div class="canvas-wrapper">
-                        <canvas id="bullseye-canvas"></canvas>
-                        <div class="bullseye-legend">
-                            <span class="legend-dot critical"></span> CRITICAL &lt;100m
-                            <span class="legend-dot warning"></span> WARNING &lt;1km
-                            <span class="legend-dot watch"></span> WATCH &lt;5km
-                        </div>
-                        <div class="sat-selector">
-                            <label>SELECTED SAT:</label>
-                            <select id="sat-select">
-                                <option value="">— choose —</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- CENTER: Fuel Heatmap -->
-            <section class="panel" id="panel-center">
-                <div class="panel-header">FUEL STATUS</div>
-                <div id="fuel-list" class="fuel-grid"></div>
-            </section>
-
-            <!-- RIGHT: CDMs + History -->
-            <section class="panel" id="panel-right">
-                <div class="panel-tabs">
-                    <button class="tab active" data-tab="cdms">ACTIVE CDMS</button>
-                    <button class="tab" data-tab="history">BURN LOG</button>
-                </div>
-                <div class="tab-content active" id="tab-cdms">
-                    <div id="cdm-list" class="scroll-list"></div>
-                </div>
-                <div class="tab-content" id="tab-history">
-                    <div id="history-list" class="scroll-list"></div>
                 </div>
             </section>
 
         </main>
 
-        <!-- ── Bottom: Gantt Timeline ── -->
-        <section id="gantt-panel">
-            <div class="panel-header">MANEUVER TIMELINE <span id="gantt-window">±2h window</span></div>
-            <canvas id="gantt-canvas"></canvas>
-        </section>
-
         <!-- ── Footer ── -->
         <footer id="footer">
             <span id="status-text">SYSTEM READY</span>
             <span class="footer-sep">|</span>
-            <span>Astrosis · Orbital Intelligence API</span>
+            <span>Astrosis · Satellite Physics Simulator</span>
             <span class="footer-sep">|</span>
-            <span>v2.0.0-alpha</span>
+            <span>v1.0.0</span>
         </footer>
 
         <!-- ── Loading Overlay ── -->
         <div id="loading-overlay" class="overlay">
             <div class="spinner"></div>
-            <div class="overlay-text">INITIALIZING TELEMETRY...</div>
+            <div class="overlay-text">INITIALIZING SIMULATION...</div>
         </div>
 
     </div>

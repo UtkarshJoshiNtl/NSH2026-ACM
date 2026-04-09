@@ -1,6 +1,6 @@
-# Astrosis — Orbital Intelligence API
+# Astrosis — Satellite Physics Simulator
 
-A high-performance orbital mechanics engine written in C++ with a Python API, for real-time conjunction assessment and collision avoidance.
+A web-based orbital mechanics simulator with a high-performance C++ physics engine and Python API.
 
 ## Architecture
 
@@ -13,11 +13,15 @@ C++ physics engine → pybind11 → Python FastAPI backend → REST API → HTML
 | Module | Description |
 |---|---|
 | `propagator.cpp` | RK4 orbital propagation with J2 perturbation |
-| `fuel.cpp` | Tsiolkovsky fuel depletion (Isp=300s, g₀=9.80665 m/s²) |
-| `conjunction.cpp` | KD-Tree CDM detection (O(S·T·log N)) |
-| `maneuver.cpp` | RTN-frame evasion + recovery burn planning |
 
 **Constants**: μ = 398600.4418 km³/s², Rₑ = 6378.137 km, J₂ = 1.08263×10⁻³
+
+## Features
+
+- **Orbital Propagation**: RK4 integration with J2 Earth oblateness perturbation
+- **Real-time Visualization**: Ground track map showing satellite and debris positions
+- **Interactive Simulation**: Step forward in time to observe orbital evolution
+- **Multi-object Support**: Simulate satellites and debris clouds simultaneously
 
 ## Local setup
 
@@ -49,13 +53,14 @@ docker run -p 8000:8000 astrosis
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/telemetry` | Ingest batch object states |
-| `POST` | `/api/maneuver/schedule` | Schedule evasion + recovery burns |
+| `GET` | `/api/health` | Service health and state summary |
 | `POST` | `/api/simulate/step` | Advance simulation by N seconds |
 | `GET` | `/api/visualization/snapshot` | Get current constellation state |
+| `POST` | `/api/telemetry` | Ingest batch object states |
 
 ## Roadmap
 
 - Live TLE ingestion from Celestrak
 - Atmospheric drag model (NRLMSISE-00)
+- 3D orbit visualization
 - Public hosted API

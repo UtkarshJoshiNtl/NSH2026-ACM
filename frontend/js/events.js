@@ -3,7 +3,7 @@
  */
 
 import { updateState, state } from './state.js';
-import { stepSim, runCola } from './api.js';
+import { stepSim } from './api.js';
 import { getEl } from './utils/dom.js';
 
 export function initEvents() {
@@ -24,14 +24,6 @@ export function initEvents() {
         });
     });
 
-    // ── Satellite Selection ───────────────────────────────────────────────────────
-    const satSelect = getEl('sat-select');
-    if (satSelect) {
-        satSelect.addEventListener('change', () => {
-            updateState({ selectedSat: satSelect.value || null });
-        });
-    }
-
     // ── Simulation Controls ───────────────────────────────────────────────────────
     const btnStep = getEl('btn-step');
     if (btnStep) {
@@ -48,27 +40,4 @@ export function initEvents() {
             if (ok) updateState({ status: 'SIMULATION STEP +10H SUCCESS' });
         });
     }
-
-    const btnCola = getEl('btn-cola');
-    if (btnCola) {
-        btnCola.addEventListener('click', async () => {
-            updateState({ status: 'RUNNING COLA ALGORITHM...' });
-            const ok = await runCola();
-            if (ok) updateState({ status: 'COLA MANEUVERS PLANNED' });
-        });
-    }
-}
-
-let lastSatsJson = '';
-export function populateSatSelect(satellites) {
-    const satSelect = getEl('sat-select');
-    if (!satSelect || !satellites) return;
-
-    const satsJson = JSON.stringify(satellites.map(s => s.id).sort());
-    if (satsJson === lastSatsJson) return;
-    lastSatsJson = satsJson;
-
-    const current = satSelect.value;
-    satSelect.innerHTML = '<option value="">— choose —</option>' +
-        satellites.map(s => `<option value="${s.id}" ${s.id === current ? 'selected' : ''}>${s.id}</option>`).join('');
 }

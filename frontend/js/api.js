@@ -38,30 +38,12 @@ export async function fetchSnapshot() {
     }
 }
 
-export async function fetchHistory() {
-    try {
-        const data = await apiFetch('/history/maneuvers');
-        return data.records || [];
-    } catch (e) {
-        return [];
-    }
-}
-
 export async function stepSim(hours) {
     try {
         await apiFetch('/simulate/step', {
             method: 'POST',
             body: JSON.stringify({ step_seconds: hours * 3600 })
         });
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
-
-export async function runCola() {
-    try {
-        await apiFetch('/simulate/cola', { method: 'POST' });
         return true;
     } catch (e) {
         return false;
