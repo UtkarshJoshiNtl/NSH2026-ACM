@@ -11,6 +11,7 @@ from backend.rate_limit import rate_limit_middleware
 from backend.logging_config import setup_logging, get_correlation_id, set_correlation_id
 from backend.database import engine
 from backend.cache import RedisCache
+from backend.tle_scheduler import tle_scheduler
 
 # Configure structured logging
 logger = setup_logging()
@@ -86,10 +87,30 @@ async def health_check():
     
     return health_status
 
+@app.post("/api/tle/refresh")
+async def manual_tle_refresh():
+    """Manually trigger TLE data refresh."""
+    count = await tle_scheduler.refresh_now()
+    return {
+        "status": "success",
+        "refreshed_count": count,
+        "message": f"Manually refreshed {count} TLE entries"
+    }
+
 @app.on_event("startup")
 async def startup_event():
     # Load initial state from disk (gracefully handles missing files)
     load_initial_state_from_disk(state_mgr)
+    
+    # Start TLE auto-refresh scheduler
+    await tle_scheduler.start()
+    logger.info("TLE scheduler started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Stop TLE scheduler
+    await tle_scheduler.stop()
+    logger.info("TLE scheduler stopped")
 
 if __name__ == "__main__":
     import uvicorn
