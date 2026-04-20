@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     
     # Database Configuration (PostgreSQL)
-    DATABASE_URL: str = "sqlite:///./astrosis.db"
+    DATABASE_URL: str  # Required from environment, no default
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
     
