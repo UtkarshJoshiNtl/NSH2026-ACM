@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware import Middleware
-from backend.routers import telemetry, simulate, visualization, tle, auth
+from backend.routers import telemetry, simulate, visualization, tle, auth, simulations
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
 from backend.rate_limit import rate_limit_middleware
@@ -27,6 +27,7 @@ app.include_router(simulate.router, prefix="/api")
 app.include_router(visualization.router, prefix="/api")
 app.include_router(tle.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
+app.include_router(simulations.router, prefix="/api")
 
 # Static files for frontend
 import os
