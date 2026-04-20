@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware import Middleware
 from sqlalchemy import text
-from backend.routers import telemetry, simulate, visualization, tle, auth, simulations, propagation
+from backend.routers import telemetry, simulate, visualization, tle, auth, simulations, propagation, export
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
 from backend.rate_limit import rate_limit_middleware
@@ -37,6 +37,7 @@ app.include_router(tle.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(simulations.router, prefix="/api")
 app.include_router(propagation.router, prefix="/api/propagation")
+app.include_router(export.router, prefix="/api")
 
 # Static files for frontend
 import os
