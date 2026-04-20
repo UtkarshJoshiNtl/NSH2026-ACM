@@ -80,6 +80,16 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 | `POST` | `/api/tle/import` | Import a satellite from TLE |
 | `POST` | `/api/tle/import-group` | Import a satellite group |
 
+### Propagation (C++ Physics Engine)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/propagation/propagate` | Propagate a single satellite state |
+| `POST` | `/api/propagation/propagate/batch` | Propagate multiple satellite states |
+| `POST` | `/api/propagation/propagate/steps` | Propagate with intermediate steps |
+| `POST` | `/api/propagation/conjunctions` | Detect satellite conjunctions |
+| `GET` | `/api/propagation/health` | Check C++ physics engine health |
+
 ## Roadmap
 
 - ✅ Live TLE ingestion from Celestrak
