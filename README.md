@@ -42,13 +42,6 @@ python3 scripts/generate_initial_state.py
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-## Docker
-
-```bash
-docker build -t astrosis .
-docker run -p 8000:8000 astrosis
-```
-
 ## API endpoints
 
 | Method | Path | Description |
