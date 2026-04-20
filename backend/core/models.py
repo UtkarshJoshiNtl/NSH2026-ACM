@@ -13,6 +13,21 @@ class ObjectState:
     nominal_slot: List[float] = field(default_factory=list)  # [x,y,z] km ECI
     status: str = "NOMINAL"          # NOMINAL | WARNING | CRITICAL | EOL
 
+
+@dataclass
+class Satellite(ObjectState):
+    """Satellite-specific state with additional properties."""
+    def __init__(self, id: str, r: List[float], v: List[float], mass: float = 1000.0):
+        super().__init__(
+            id=id,
+            obj_type="SATELLITE",
+            r=r,
+            v=v,
+            dry_mass=mass,
+            m_fuel=50.0
+        )
+
+
 @dataclass
 class ScheduledBurn:
     burn_id: str
