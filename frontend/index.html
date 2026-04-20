@@ -82,6 +82,31 @@
             </div>
         </div>
 
+        <!-- Auth Modal -->
+        <div id="auth-modal" class="overlay hidden">
+            <div class="modal">
+                <h2 id="auth-modal-title">Sign In</h2>
+                <div class="auth-tabs">
+                    <button id="tab-signin" class="auth-tab active">Sign In</button>
+                    <button id="tab-signup" class="auth-tab">Register</button>
+                </div>
+                <div id="signin-form">
+                    <input type="email" id="signin-email" placeholder="Email" />
+                    <input type="password" id="signin-password" placeholder="Password" />
+                </div>
+                <div id="signup-form" class="hidden">
+                    <input type="email" id="signup-email" placeholder="Email" />
+                    <input type="password" id="signup-password" placeholder="Password" />
+                    <input type="password" id="signup-confirm-password" placeholder="Confirm Password" />
+                </div>
+                <div id="auth-error" class="auth-error hidden"></div>
+                <div class="modal-buttons">
+                    <button id="btn-auth-submit" class="ctrl-btn primary">Sign In</button>
+                    <button id="btn-auth-cancel" class="ctrl-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+
     </div>
     <script type="module" src="js/main.js"></script>
 </body>

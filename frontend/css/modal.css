@@ -21,7 +21,8 @@
     font-size: 14px;
 }
 
-.modal input[type="password"] {
+.modal input[type="password"],
+.modal input[type="email"] {
     width: 100%;
     padding: 10px 12px;
     background: #0f0f1a;
@@ -29,11 +30,12 @@
     border-radius: 4px;
     color: #e0e0e0;
     font-size: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     box-sizing: border-box;
 }
 
-.modal input[type="password"]:focus {
+.modal input[type="password"]:focus,
+.modal input[type="email"]:focus {
     outline: none;
     border-color: #3fb950;
 }
@@ -42,4 +44,41 @@
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+}
+
+/* Auth Modal Specific Styles */
+.auth-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #303050;
+}
+
+.auth-tab {
+    background: transparent;
+    border: none;
+    color: #a0a0b0;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.auth-tab:hover {
+    color: #e0e0e0;
+}
+
+.auth-tab.active {
+    color: #3fb950;
+    border-bottom-color: #3fb950;
+}
+
+.auth-error {
+    color: #f85149;
+    font-size: 13px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: rgba(248, 81, 73, 0.1);
+    border: 1px solid rgba(248, 81, 73, 0.3);
+    border-radius: 4px;
 }
