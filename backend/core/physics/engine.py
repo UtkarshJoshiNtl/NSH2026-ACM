@@ -5,13 +5,32 @@ High-level wrapped API for the ACM physics engine.
 import math
 from .loader import physics as _physics
 from .constants import DRY_MASS, ISP, G0, INITIAL_FUEL
-from .fallback import rk4_py
+from .fallback import rk4_py, rk4_py_drag
 
 def propagate(state: list, dt_seconds: float) -> list:
     if _physics:
         result = _physics.Propagator().propagate(state, dt_seconds)
         return list(result)
     return list(rk4_py(tuple(state), dt_seconds))
+
+def propagate_with_drag(state: list, dt_seconds: float, area: float = 0.1, mass: float = 100.0, cd: float = 2.2) -> list:
+    """Propagate state with atmospheric drag for LEO objects.
+    
+    Args:
+        state: Position and velocity [x, y, z, vx, vy, vz]
+        dt_seconds: Time step in seconds
+        area: Cross-sectional area in m²
+        mass: Object mass in kg
+        cd: Drag coefficient
+    
+    Returns:
+        Updated state list
+    """
+    if _physics:
+        # C++ engine doesn't support drag parameters yet, use Python fallback
+        result = rk4_py_drag(tuple(state), dt_seconds, area, mass, cd)
+        return list(result)
+    return list(rk4_py_drag(tuple(state), dt_seconds, area, mass, cd))
 
 def propagate_steps(state: list, total_seconds: float, step_size: float = 10.0) -> list:
     if _physics:
