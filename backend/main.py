@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware import Middleware
 from backend.routers import telemetry, simulate, visualization, tle, auth
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
+from backend.rate_limit import rate_limit_middleware
 import logging
 
 # Configure logging
@@ -17,6 +19,7 @@ app = FastAPI(title="Astrosis — Satellite Physics Simulator")
 
 # Middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.middleware("http")(rate_limit_middleware)
 
 # Routers
 app.include_router(telemetry.router, prefix="/api")

@@ -28,3 +28,6 @@ asyncpg==0.29.0
 # Authentication
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
+
+# Caching and rate limiting
+redis==5.0.1

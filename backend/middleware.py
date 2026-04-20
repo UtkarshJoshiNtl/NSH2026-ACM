@@ -9,7 +9,7 @@ from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from backend.database import get_db, APIKey
+from backend.database import get_db, APIKey, User
 from backend.auth import verify_api_key
 
 # API key header extraction
@@ -65,10 +65,21 @@ async def get_current_user(api_key: APIKey = Depends(get_api_key)) -> dict:
     Get current user from API key.
     Returns user information for rate limiting and context.
     """
+    from sqlalchemy.orm import Session
+    from backend.database import get_db
+    
+    # Get user from database to get tier
+    db: Session = next(get_db())
+    try:
+        user = db.query(User).filter(User.id == api_key.user_id).first()
+        tier = user.tier if user else "free"
+    finally:
+        db.close()
+    
     return {
         "user_id": api_key.user_id,
         "api_key_id": api_key.id,
-        "tier": api_key.user.tier if api_key.user else "free"
+        "tier": tier
     }
 
 
