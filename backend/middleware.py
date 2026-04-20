@@ -31,8 +31,7 @@ async def get_api_key(
         )
     
     # Hash the provided key and look it up in database
-    key_hash = verify_api_key(api_key, "")  # Get hash format
-    key_hash = api_key  # For now, store raw keys (will migrate to hashed)
+    key_hash = hash_api_key(api_key)
     
     # Look up API key in database
     api_key_record = db.query(APIKey).filter(
@@ -47,14 +46,15 @@ async def get_api_key(
         )
     
     # Check if key is expired
-    if api_key_record.expires_at and api_key_record.expires_at < datetime.utcnow():
+    from datetime import datetime, timezone
+    if api_key_record.expires_at and api_key_record.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key has expired.",
         )
     
     # Update last used timestamp
-    api_key_record.last_used = datetime.utcnow()
+    api_key_record.last_used = datetime.now(timezone.utc)
     db.commit()
     
     return api_key_record
@@ -95,7 +95,7 @@ async def optional_api_key(
     if not api_key:
         return None
     
-    key_hash = api_key
+    key_hash = hash_api_key(api_key)
     api_key_record = db.query(APIKey).filter(
         APIKey.key_hash == key_hash,
         APIKey.is_active == True
