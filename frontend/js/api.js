@@ -5,17 +5,39 @@
 import { API_BASE } from './constants.js';
 
 /**
+ * Get API key from localStorage
+ */
+function getApiKey() {
+    return localStorage.getItem('astrosis_api_key');
+}
+
+/**
+ * Set API key in localStorage
+ */
+function setApiKey(key) {
+    localStorage.setItem('astrosis_api_key', key);
+}
+
+/**
  * apiFetch — Common fetch wrapper with error handling
  */
 async function apiFetch(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
+    const apiKey = getApiKey();
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+    };
+    
+    if (apiKey) {
+        headers['X-API-Key'] = apiKey;
+    }
+    
     try {
         const response = await fetch(url, {
             ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers,
-            },
+            headers,
         });
 
         if (!response.ok) {
@@ -49,3 +71,5 @@ export async function stepSim(hours) {
         return false;
     }
 }
+
+export { setApiKey, getApiKey };
