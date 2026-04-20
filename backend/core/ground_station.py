@@ -100,3 +100,76 @@ def get_all_stations() -> List[dict]:
     except FileNotFoundError:
         pass
     return stations
+
+
+def calculate_visibility(sat_eci: List[float], station: dict, time_s: float = 0.0) -> dict:
+    """
+    Calculate visibility of a satellite from a ground station.
+    
+    Args:
+        sat_eci: Satellite ECI position [x, y, z] in km
+        station: Ground station dictionary with lat, lon, elevation_m, min_elevation_deg
+        time_s: Time in seconds (for Earth rotation)
+    
+    Returns:
+        Dictionary with visibility status, elevation angle, and azimuth
+    """
+    # Convert satellite ECI to geodetic
+    sat_lat, sat_lon, sat_alt = eci_to_geodetic(sat_eci, time_s)
+    
+    # Station coordinates
+    stn_lat = math.radians(station["lat"])
+    stn_lon = math.radians(station["lon"])
+    sat_lat_rad = math.radians(sat_lat)
+    sat_lon_rad = math.radians(sat_lon)
+    
+    # Calculate elevation angle using spherical geometry
+    # Elevation angle from station to satellite
+    cos_el = (math.sin(stn_lat) * math.sin(sat_lat_rad) + 
+              math.cos(stn_lat) * math.cos(sat_lat_rad) * math.cos(sat_lon_rad - stn_lon))
+    
+    # Clamp to [-1, 1] to avoid numerical errors
+    cos_el = max(-1.0, min(1.0, cos_el))
+    
+    elevation_angle = math.acos(cos_el) - math.pi / 2  # Convert to elevation from horizon
+    elevation_deg = math.degrees(elevation_angle)
+    
+    # Calculate azimuth
+    y = math.sin(sat_lon_rad - stn_lon)
+    x = math.cos(sat_lat_rad) * math.tan(stn_lat) - math.sin(sat_lat_rad) * math.cos(sat_lon_rad - stn_lon)
+    azimuth_deg = math.degrees(math.atan2(y, x))
+    
+    # Check visibility
+    is_visible = elevation_deg >= station["min_elevation_deg"]
+    
+    return {
+        "visible": is_visible,
+        "elevation_deg": elevation_deg,
+        "azimuth_deg": azimuth_deg,
+        "min_elevation_deg": station["min_elevation_deg"]
+    }
+
+
+def get_visible_stations(sat_eci: List[float], time_s: float = 0.0) -> List[dict]:
+    """
+    Get all ground stations that currently have visibility of a satellite.
+    
+    Args:
+        sat_eci: Satellite ECI position [x, y, z] in km
+        time_s: Time in seconds
+    
+    Returns:
+        List of visible ground stations with visibility details
+    """
+    stations = get_all_stations()
+    visible = []
+    
+    for station in stations:
+        vis = calculate_visibility(sat_eci, station, time_s)
+        if vis["visible"]:
+            visible.append({
+                **station,
+                "visibility": vis
+            })
+    
+    return visible
