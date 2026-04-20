@@ -50,8 +50,7 @@ class ConjunctionResponse(BaseModel):
 
 @router.post("/propagate", response_model=PropagateResponse)
 async def propagate_single(
-    req: PropagateRequest,
-    user: dict = Depends(get_current_user)
+    req: PropagateRequest, user: dict = Depends(get_current_user)
 ):
     """
     Propagate a single satellite state by time delta using the C++ physics engine.
@@ -61,23 +60,20 @@ async def propagate_single(
         # Combine r and v into single array for C++ engine
         state = req.state.r + req.state.v
         new_state = propagate(state, req.dt)
-        
+
         return PropagateResponse(
-            r=new_state[:3],
-            v=new_state[3:],
-            propagated_time=req.dt
+            r=new_state[:3], v=new_state[3:], propagated_time=req.dt
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Propagation failed: {str(e)}"
+            detail=f"Propagation failed: {str(e)}",
         )
 
 
 @router.post("/propagate/batch", response_model=List[PropagateResponse])
 async def propagate_batch(
-    req: BatchPropagateRequest,
-    user: dict = Depends(get_current_user)
+    req: BatchPropagateRequest, user: dict = Depends(get_current_user)
 ):
     """
     Propagate multiple satellite states by time delta using the C++ physics engine.
@@ -88,26 +84,24 @@ async def propagate_batch(
         for state in req.states:
             state_array = state.r + state.v
             new_state = propagate(state_array, req.dt)
-            
-            results.append(PropagateResponse(
-                r=new_state[:3],
-                v=new_state[3:],
-                propagated_time=req.dt
-            ))
-        
+
+            results.append(
+                PropagateResponse(
+                    r=new_state[:3], v=new_state[3:], propagated_time=req.dt
+                )
+            )
+
         return results
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Batch propagation failed: {str(e)}"
+            detail=f"Batch propagation failed: {str(e)}",
         )
 
 
 @router.post("/propagate/steps")
 async def propagate_with_steps(
-    req: PropagateRequest,
-    steps: int = 10,
-    user: dict = Depends(get_current_user)
+    req: PropagateRequest, steps: int = 10, user: dict = Depends(get_current_user)
 ):
     """
     Propagate a satellite state by time delta in multiple steps.
@@ -116,34 +110,28 @@ async def propagate_with_steps(
     try:
         state = req.state.r + req.state.v
         dt_per_step = req.dt / steps
-        
+
         states = propagate_steps(state, dt_per_step, steps)
-        
+
         return {
             "steps": steps,
             "dt_per_step": dt_per_step,
             "total_time": req.dt,
             "states": [
-                {
-                    "step": i,
-                    "r": s[:3],
-                    "v": s[3:],
-                    "time": i * dt_per_step
-                }
+                {"step": i, "r": s[:3], "v": s[3:], "time": i * dt_per_step}
                 for i, s in enumerate(states)
-            ]
+            ],
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Step propagation failed: {str(e)}"
+            detail=f"Step propagation failed: {str(e)}",
         )
 
 
 @router.post("/conjunctions", response_model=ConjunctionResponse)
 async def detect_conjunctions_api(
-    req: ConjunctionRequest,
-    user: dict = Depends(get_current_user)
+    req: ConjunctionRequest, user: dict = Depends(get_current_user)
 ):
     """
     Detect conjunctions (close approaches) between satellites.
@@ -152,18 +140,15 @@ async def detect_conjunctions_api(
     try:
         # Convert state vectors to format expected by C++ engine
         states = [s.r + s.v for s in req.states]
-        
+
         # Detect conjunctions
         conjunctions = detect_conjunctions(states, req.threshold_km)
-        
-        return ConjunctionResponse(
-            pairs=conjunctions,
-            count=len(conjunctions)
-        )
+
+        return ConjunctionResponse(pairs=conjunctions, count=len(conjunctions))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Conjunction detection failed: {str(e)}"
+            detail=f"Conjunction detection failed: {str(e)}",
         )
 
 
@@ -174,15 +159,7 @@ async def propagation_health():
         # Test propagation with a simple state
         test_state = [7000.0, 0.0, 0.0, 0.0, 7.5, 0.0]
         result = propagate(test_state, 60.0)
-        
-        return {
-            "status": "healthy",
-            "engine": "C++",
-            "test_passed": True
-        }
+
+        return {"status": "healthy", "engine": "C++", "test_passed": True}
     except Exception as e:
-        return {
-            "status": "unhealthy",
-            "engine": "C++",
-            "error": str(e)
-        }
+        return {"status": "unhealthy", "engine": "C++", "error": str(e)}

@@ -4,7 +4,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware import Middleware
 from sqlalchemy import text
-from backend.routers import telemetry, simulate, visualization, tle, auth, simulations, propagation, export
+from backend.routers import (
+    telemetry,
+    simulate,
+    visualization,
+    tle,
+    auth,
+    simulations,
+    propagation,
+    export,
+)
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
 from backend.rate_limit import rate_limit_middleware
@@ -41,8 +50,10 @@ app.include_router(export.router, prefix="/api")
 
 # Static files for frontend
 import os
+
 if os.path.exists("frontend"):
     app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+
 
 @app.get("/api/health")
 async def health_check():
@@ -51,9 +62,9 @@ async def health_check():
         "status": "healthy",
         "version": "1.0.0",
         "dependencies": {},
-        "state": state_mgr.get_summary()
+        "state": state_mgr.get_summary(),
     }
-    
+
     # Check database connectivity
     try:
         with engine.connect() as conn:
@@ -62,7 +73,7 @@ async def health_check():
     except Exception as e:
         health_status["status"] = "degraded"
         health_status["dependencies"]["database"] = f"disconnected: {str(e)}"
-    
+
     # Check Redis connectivity
     try:
         redis_cache = RedisCache()
@@ -75,18 +86,20 @@ async def health_check():
     except Exception as e:
         health_status["status"] = "degraded"
         health_status["dependencies"]["redis"] = f"disconnected: {str(e)}"
-    
+
     # Check physics engine
     try:
         from backend.core.physics.loader import physics as _physics
+
         if _physics:
             health_status["dependencies"]["physics_engine"] = "loaded"
         else:
             health_status["dependencies"]["physics_engine"] = "using_fallback"
     except Exception as e:
         health_status["dependencies"]["physics_engine"] = f"error: {str(e)}"
-    
+
     return health_status
+
 
 @app.post("/api/tle/refresh")
 async def manual_tle_refresh():
@@ -95,17 +108,19 @@ async def manual_tle_refresh():
     return {
         "status": "success",
         "refreshed_count": count,
-        "message": f"Manually refreshed {count} TLE entries"
+        "message": f"Manually refreshed {count} TLE entries",
     }
+
 
 @app.on_event("startup")
 async def startup_event():
     # Load initial state from disk (gracefully handles missing files)
     load_initial_state_from_disk(state_mgr)
-    
+
     # Start TLE auto-refresh scheduler
     await tle_scheduler.start()
     logger.info("TLE scheduler started")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -113,6 +128,8 @@ async def shutdown_event():
     await tle_scheduler.stop()
     logger.info("TLE scheduler stopped")
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

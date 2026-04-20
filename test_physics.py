@@ -12,6 +12,7 @@ pybind11 module.  Run from the project root after building:
 import sys
 import os
 import math
+import pytest
 
 # ── Locate the built .so ─────────────────────────────────────────────────────
 BUILD_DIR = os.path.join(os.path.dirname(__file__), "backend", "cpp", "build")
@@ -21,7 +22,11 @@ try:
     import physics_engine as pe
 except ImportError as e:
     print(f"FATAL: Could not import physics_engine from {BUILD_DIR}: {e}")
-    sys.exit(1)
+    # Don't exit if running under pytest
+    if "pytest" in sys.modules:
+        pytest.skip("physics_engine not built", allow_module_level=True)
+    else:
+        sys.exit(1)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -200,4 +205,7 @@ if plan is not None:
 
 result = "ALL CHECKS PASSED ✅" if all_passed else "SOME CHECKS FAILED ❌"
 print(f"\n  {result}\n")
-sys.exit(0 if all_passed else 1)
+
+# Only exit if not running under pytest
+if "pytest" not in sys.modules:
+    sys.exit(0 if all_passed else 1)

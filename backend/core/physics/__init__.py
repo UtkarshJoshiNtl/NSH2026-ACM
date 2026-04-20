@@ -3,5 +3,5 @@ from .engine import (
     propagate_steps,
     compute_fuel_used,
     detect_conjunctions,
-    calculate_maneuver
+    calculate_maneuver,
 )

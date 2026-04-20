@@ -9,9 +9,17 @@ from .physics import (
     propagate_steps,
     compute_fuel_used,
     detect_conjunctions,
-    calculate_maneuver
+    calculate_maneuver,
 )
 
 from .physics.constants import (
-    MU, RE, J2, ISP, G0, DRY_MASS, INITIAL_FUEL, MAX_DV, COOLDOWN_S
+    MU,
+    RE,
+    J2,
+    ISP,
+    G0,
+    DRY_MASS,
+    INITIAL_FUEL,
+    MAX_DV,
+    COOLDOWN_S,
 )

@@ -19,12 +19,15 @@ import time
 
 router = APIRouter()
 
+
 class TLEGroupRequest(BaseModel):
     group: str
+
 
 class TLEImportRequest(BaseModel):
     tle: str
     timestamp: float = None  # If None, use current simulation time
+
 
 @router.get("/tle/groups")
 async def get_groups():
@@ -42,18 +45,21 @@ async def ingest_tle(satellite_id: str = None, user: dict = Depends(optional_api
             user_id = user.get("user_id") if user else "anonymous"
             key = f"tle_ingest:{user_id}"
             if not cache.check_rate_limit(key, 10, 60):  # 10 requests per minute
-                raise HTTPException(status_code=429, detail="TLE ingest rate limit exceeded (10/min)")
-        
+                raise HTTPException(
+                    status_code=429, detail="TLE ingest rate limit exceeded (10/min)"
+                )
+
         count = await tle_ingestor.ingest(satellite_id)
         return {
             "status": "success",
             "ingested_count": count,
-            "message": f"Successfully ingested {count} TLE entries"
+            "message": f"Successfully ingested {count} TLE entries",
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/tle/fetch-group")
 async def fetch_group(req: TLEGroupRequest, user: dict = Depends(optional_api_key)):
@@ -65,8 +71,10 @@ async def fetch_group(req: TLEGroupRequest, user: dict = Depends(optional_api_ke
             user_id = user.get("user_id") if user else "anonymous"
             key = f"tle_fetch:{user_id}"
             if not cache.check_rate_limit(key, 30, 60):  # 30 requests per minute
-                raise HTTPException(status_code=429, detail="TLE fetch rate limit exceeded (30/min)")
-        
+                raise HTTPException(
+                    status_code=429, detail="TLE fetch rate limit exceeded (30/min)"
+                )
+
         tles = await fetch_tle_group(req.group)
         return {
             "status": "success",
@@ -79,6 +87,7 @@ async def fetch_group(req: TLEGroupRequest, user: dict = Depends(optional_api_ke
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.post("/tle/fetch-norad")
 async def fetch_norad(norad_id: str, user: dict = Depends(optional_api_key)):
     """Fetch TLE data for a specific NORAD ID."""
@@ -89,11 +98,15 @@ async def fetch_norad(norad_id: str, user: dict = Depends(optional_api_key)):
             user_id = user.get("user_id") if user else "anonymous"
             key = f"tle_fetch:{user_id}"
             if not cache.check_rate_limit(key, 30, 60):  # 30 requests per minute
-                raise HTTPException(status_code=429, detail="TLE fetch rate limit exceeded (30/min)")
-        
+                raise HTTPException(
+                    status_code=429, detail="TLE fetch rate limit exceeded (30/min)"
+                )
+
         tle = await fetch_tle_by_norad_id(norad_id)
         if not tle:
-            raise HTTPException(status_code=404, detail=f"Satellite with NORAD ID {norad_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Satellite with NORAD ID {norad_id} not found"
+            )
         return {
             "status": "success",
             "norad_id": norad_id,
@@ -104,30 +117,32 @@ async def fetch_norad(norad_id: str, user: dict = Depends(optional_api_key)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.post("/tle/import")
 async def import_satellite(req: TLEImportRequest):
     """Import a satellite from TLE into the simulation."""
     try:
         timestamp = req.timestamp or state_mgr.simulation_time or time.time()
-        
+
         # Convert TLE to state vector
         state = tle_to_state_vector(req.tle, timestamp)
         name = get_satellite_name(req.tle)
-        
+
         # Create satellite object
         sat_id = f"TLE-{name.replace(' ', '-')}"
-        
+
         from backend.core.models import Satellite
+
         satellite = Satellite(
             id=sat_id,
             r=state["r"],
             v=state["v"],
             mass=1000.0,  # Default mass
         )
-        
+
         # Add to state manager
         state_mgr.objects[sat_id] = satellite
-        
+
         return {
             "status": "success",
             "satellite_id": sat_id,
@@ -137,38 +152,42 @@ async def import_satellite(req: TLEImportRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.post("/tle/import-group")
 async def import_group(req: TLEGroupRequest):
     """Import all satellites from a group."""
     try:
         tles = await fetch_tle_group(req.group)
         timestamp = state_mgr.simulation_time or time.time()
-        
+
         imported = []
         for tle in tles:
             try:
                 state = tle_to_state_vector(tle, timestamp)
                 name = get_satellite_name(tle)
                 sat_id = f"TLE-{name.replace(' ', '-')}"
-                
+
                 from backend.core.models import Satellite
+
                 satellite = Satellite(
                     id=sat_id,
                     r=state["r"],
                     v=state["v"],
                     mass=1000.0,
                 )
-                
+
                 state_mgr.objects[sat_id] = satellite
-                imported.append({
-                    "satellite_id": sat_id,
-                    "name": name,
-                    "orbital_elements": state["orbital_elements"],
-                })
+                imported.append(
+                    {
+                        "satellite_id": sat_id,
+                        "name": name,
+                        "orbital_elements": state["orbital_elements"],
+                    }
+                )
             except Exception as e:
                 # Skip failed imports
                 continue
-        
+
         return {
             "status": "success",
             "group": req.group,

@@ -8,10 +8,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def load_physics_engine():
     _BUILD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "cpp", "build")
     _BUILD_DIR = os.path.abspath(_BUILD_DIR)
-    _ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    _ROOT_DIR = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    )
 
     for _path in [_BUILD_DIR, _ROOT_DIR]:
         if _path not in sys.path:
@@ -19,10 +22,12 @@ def load_physics_engine():
 
     try:
         import physics_engine as _physics
+
         logger.info("physics_engine C++ module loaded successfully")
         return _physics
     except ImportError as exc:
         logger.warning("physics_engine C++ module not found; using Python fallback")
         return None
+
 
 physics = load_physics_engine()

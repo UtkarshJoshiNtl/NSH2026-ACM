@@ -11,12 +11,12 @@ from pythonjsonlogger import jsonlogger
 from backend.config import settings
 
 # Context variable for correlation ID
-correlation_id: ContextVar[str] = ContextVar('correlation_id', default='')
+correlation_id: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 class CorrelationFilter(logging.Filter):
     """Filter to add correlation ID to log records."""
-    
+
     def filter(self, record):
         record.correlation_id = correlation_id.get()
         return True
@@ -24,27 +24,27 @@ class CorrelationFilter(logging.Filter):
 
 def setup_logging():
     """Configure structured JSON logging with correlation IDs."""
-    
+
     # Create formatter
     formatter = jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(correlation_id)s',
-        timestamp=True
+        "%(asctime)s %(name)s %(levelname)s %(message)s %(correlation_id)s",
+        timestamp=True,
     )
-    
+
     # Get root logger
     logger = logging.getLogger()
     logger.setLevel(getattr(logging, settings.LOG_LEVEL.upper()))
-    
+
     # Clear existing handlers
     logger.handlers.clear()
-    
+
     # Create console handler
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     handler.addFilter(CorrelationFilter())
-    
+
     logger.addHandler(handler)
-    
+
     return logger
 
 
