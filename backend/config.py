@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     TLE_REFRESH_INTERVAL_HOURS: int = 6
     
     # Security
-    SECRET_KEY: str = "dev-secret-key-change-in-production"
+    SECRET_KEY: str  # Required from environment, no default
     API_KEY_LENGTH: int = 32
     
     # Logging
