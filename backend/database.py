@@ -7,7 +7,7 @@ SQLAlchemy models for users, API keys, simulations, and TLE data.
 from sqlalchemy import create_engine, Column, String, DateTime, Float, Integer, Text, Boolean, ForeignKey, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from backend.config import settings
@@ -35,7 +35,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     tier = Column(String, default="free")  # free, pro, enterprise
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
     
     # Relationships
@@ -53,7 +53,7 @@ class APIKey(Base):
     name = Column(String, nullable=False)  # User-friendly name for the key
     is_active = Column(Boolean, default=True)
     last_used = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime, nullable=True)
     
     # Relationships
@@ -69,8 +69,8 @@ class Simulation(Base):
     name = Column(String, nullable=False)
     simulation_time = Column(Float, default=0.0)
     state_data = Column(Text, nullable=True)  # JSON-serialized state
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
     
     # Relationships
@@ -88,7 +88,7 @@ class TLEData(Base):
     line2 = Column(String, nullable=False)
     epoch = Column(DateTime, nullable=True, index=True)
     source = Column(String, default="celestrak")  # celestrak, manual, etc.
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Composite index for efficient queries
     __table_args__ = (

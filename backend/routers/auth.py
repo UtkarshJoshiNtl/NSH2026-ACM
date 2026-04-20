@@ -7,7 +7,7 @@ User registration, login, and API key management.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from backend.database import get_db, User, APIKey
@@ -125,7 +125,7 @@ async def create_api_key(
         key_hash=key_hash,
         user_id=user.id,
         name=key_data.name,
-        expires_at=datetime.utcnow() + timedelta(days=365)  # 1 year expiry
+        expires_at=datetime.now(timezone.utc) + timedelta(days=365)  # 1 year expiry
     )
     db.add(new_api_key)
     db.commit()
