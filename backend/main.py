@@ -7,14 +7,10 @@ from backend.routers import telemetry, simulate, visualization, tle, auth, simul
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
 from backend.rate_limit import rate_limit_middleware
-import logging
+from backend.logging_config import setup_logging, get_correlation_id, set_correlation_id
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("Astrosis-Backend")
+# Configure structured logging
+logger = setup_logging()
 
 app = FastAPI(title="Astrosis — Satellite Physics Simulator")
 

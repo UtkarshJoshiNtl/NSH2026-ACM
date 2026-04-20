@@ -1,14 +1,16 @@
 """
 backend/rate_limit.py — Rate Limiting Middleware
 ================================================
-FastAPI middleware for API rate limiting using Redis.
+Rate limiting based on user tier using Redis.
 """
 
-from fastapi import HTTPException, status, Request
+from fastapi import HTTPException, status, Request, Response
 from fastapi.responses import JSONResponse
 from typing import Callable
-from backend.cache import cache
+from backend.cache import RedisCache as cache
 from backend.config import settings
+from backend.middleware import get_current_user, optional_api_key
+from backend.logging_config import get_correlation_id, set_correlation_id
 
 
 async def rate_limit_middleware(request: Request, call_next: Callable):
@@ -16,6 +18,13 @@ async def rate_limit_middleware(request: Request, call_next: Callable):
     Rate limiting middleware using Redis.
     Checks rate limits based on user tier from authentication context.
     """
+    # Generate or retrieve correlation ID
+    cid = request.headers.get("X-Correlation-ID")
+    if cid:
+        set_correlation_id(cid)
+    else:
+        cid = get_correlation_id()
+    
     # Skip rate limiting for health endpoint
     if request.url.path == "/api/health":
         return await call_next(request)
