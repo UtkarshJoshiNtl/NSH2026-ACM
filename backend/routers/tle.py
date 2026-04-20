@@ -12,6 +12,7 @@ from backend.core.tle_handler import (
     get_satellite_groups,
 )
 from backend.core.state_manager import state_mgr
+from backend.tle_ingest import tle_ingestor
 import time
 
 router = APIRouter()
@@ -27,6 +28,20 @@ class TLEImportRequest(BaseModel):
 async def get_groups():
     """Get available satellite groups from Celestrak."""
     return {"groups": get_satellite_groups()}
+
+
+@router.post("/tle/ingest")
+async def ingest_tle(satellite_id: str = None):
+    """Ingest TLE data from Celestrak into the database."""
+    try:
+        count = await tle_ingestor.ingest(satellite_id)
+        return {
+            "status": "success",
+            "ingested_count": count,
+            "message": f"Successfully ingested {count} TLE entries"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/tle/fetch-group")
 async def fetch_group(req: TLEGroupRequest):
