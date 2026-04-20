@@ -38,16 +38,31 @@
 
             <!-- Map Panel -->
             <section class="panel" id="panel-left">
-                <div class="panel-tabs">
-                    <button class="tab active" data-tab="map">GROUND TRACK</button>
+                <div class="panel-header">
+                    <span class="panel-title">Ground Track</span>
+                    <div class="panel-badges">
+                        <span class="badge badge-blue">LIVE</span>
+                    </div>
                 </div>
-                <div class="tab-content active" id="tab-map">
-                    <div class="canvas-wrapper">
-                        <canvas id="map-canvas"></canvas>
-                        <div class="map-overlay-badges">
-                            <span class="badge" id="badge-sats">SAT: 0</span>
-                            <span class="badge" id="badge-deb">DEB: 0</span>
-                        </div>
+                <div class="panel-body">
+                    <canvas id="map-canvas"></canvas>
+                    <div class="overlay-badges">
+                        <span class="overlay-badge" id="h-deb-count">0 debris</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Maneuver Queue Panel -->
+            <section class="panel" id="panel-right">
+                <div class="panel-header">
+                    <span class="panel-title">Maneuver Queue</span>
+                    <div class="panel-badges">
+                        <span class="badge badge-orange" id="maneuver-count">0 pending</span>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div id="maneuver-list" class="list-container">
+                        <!-- Maneuver items will be populated by JS -->
                     </div>
                 </div>
             </section>

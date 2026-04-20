@@ -9,6 +9,7 @@ import { setText, getEl } from './utils/dom.js';
 
 // Renderers
 import { updateHeader } from './renderers/header.js';
+import { renderManeuvers } from './components/maneuvers.js';
 
 // Components
 import { initMap, renderMap } from './components/map.js';
@@ -28,6 +29,7 @@ async function bootstrap() {
     onStateChange((s) => {
         updateHeader(s.snapshot);
         renderMap(s.snapshot);
+        renderManeuvers(s.snapshot?.pending_burns || []);
 
         setText('sim-time', s.snapshot ? new Date(s.snapshot.timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19) : '—');
         setText('h-deb-count', s.snapshot?.debris_cloud ? s.snapshot.debris_cloud.length : 0);
