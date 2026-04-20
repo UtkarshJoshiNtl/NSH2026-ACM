@@ -1,6 +1,13 @@
+"""
+backend/routers/visualization.py — Visualization Endpoints
+======================================================
+Endpoints for retrieving simulation state for visualization.
+"""
+
 from fastapi import APIRouter
 from backend.core.state_manager import state_mgr
 from backend.core.ground_station import eci_to_geodetic, get_all_stations
+import numpy as np
 
 router = APIRouter()
 
@@ -45,11 +52,21 @@ async def get_snapshot():
     ]
 
     return {
-        "timestamp": state_mgr.simulation_time,
+        "timestamp": t_now,
         "satellites": satellites_out,
         "debris_cloud": debris_cloud,
-        "active_cdms": state_mgr.active_cdms[:20],
+        "active_cdms": state_mgr.active_cdms,
         "ground_stations": get_all_stations(),
-        "pending_burns": pending_burns[:50],
-        "history_count": len(state_mgr.maneuver_history),
+        "pending_burns": state_mgr.get_context("default").scheduled_burns if state_mgr.get_context("default") else []
+    }
+
+
+@router.get("/visualization/fuel-alerts")
+async def get_fuel_alerts(threshold_pct: float = 5.0):
+    """Get satellites with critically low fuel."""
+    depleted = state_mgr.check_fuel_depletion(threshold_pct)
+    return {
+        "threshold_pct": threshold_pct,
+        "alert_count": len(depleted),
+        "alerts": depleted
     }

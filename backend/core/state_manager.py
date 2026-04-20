@@ -104,6 +104,33 @@ class StateManager:
         with ctx._lock:
             return [o for o in ctx.objects.values() if o.obj_type == "DEBRIS"]
 
+    def check_fuel_depletion(self, simulation_id: Optional[str] = None, threshold_pct: float = 5.0) -> List[dict]:
+        """Check for satellites with critically low fuel.
+        
+        Args:
+            threshold_pct: Fuel percentage threshold (default 5%)
+        
+        Returns:
+            List of satellites with fuel below threshold
+        """
+        from backend.core.physics.constants import INITIAL_FUEL
+        ctx = self._get_context(simulation_id)
+        with ctx._lock:
+            depleted = []
+            
+            for obj in ctx.objects.values():
+                if obj.obj_type == "SATELLITE":
+                    fuel_pct = (obj.m_fuel / INITIAL_FUEL) * 100.0 if INITIAL_FUEL > 0 else 0.0
+                    if fuel_pct < threshold_pct:
+                        depleted.append({
+                            "id": obj.id,
+                            "fuel_kg": obj.m_fuel,
+                            "fuel_percentage": fuel_pct,
+                            "status": "CRITICAL" if fuel_pct < 1.0 else "WARNING"
+                        })
+            
+            return depleted
+
     def object_count(self, simulation_id: Optional[str] = None) -> dict:
         """Get object counts from the specified context."""
         ctx = self._get_context(simulation_id)
