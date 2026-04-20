@@ -3,10 +3,41 @@
  */
 
 import { updateState, state } from './state.js';
-import { stepSim } from './api.js';
+import { stepSim, setApiKey, getApiKey } from './api.js';
 import { getEl } from './utils/dom.js';
 
 export function initEvents() {
+    // ── API Key Modal ────────────────────────────────────────────────────────────
+    const btnApiKey = getEl('btn-api-key');
+    const modal = getEl('api-key-modal');
+    const apiKeyInput = getEl('api-key-input');
+    const btnSaveApiKey = getEl('btn-save-api-key');
+    const btnCancelApiKey = getEl('btn-cancel-api-key');
+
+    if (btnApiKey && modal) {
+        btnApiKey.addEventListener('click', () => {
+            apiKeyInput.value = getApiKey() || '';
+            modal.classList.remove('hidden');
+        });
+    }
+
+    if (btnSaveApiKey && modal) {
+        btnSaveApiKey.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            if (key) {
+                setApiKey(key);
+                updateState({ status: 'API KEY SAVED' });
+            }
+            modal.classList.add('hidden');
+        });
+    }
+
+    if (btnCancelApiKey && modal) {
+        btnCancelApiKey.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+    }
+
     // ── Tab Switching ─────────────────────────────────────────────────────────────
     document.querySelectorAll('.tab').forEach(btn => {
         btn.addEventListener('click', () => {

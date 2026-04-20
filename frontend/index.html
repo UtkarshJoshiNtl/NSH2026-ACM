@@ -27,6 +27,7 @@
                 <div class="hstat"><span class="hlabel">CDM</span><span class="hval" id="h-cdm-count">0</span></div>
             </div>
             <div class="header-controls">
+                <button id="btn-api-key" class="ctrl-btn">🔑 API Key</button>
                 <button id="btn-step" class="ctrl-btn primary">▶ +1H</button>
                 <button id="btn-step-10" class="ctrl-btn">▶▶ +10H</button>
             </div>
@@ -65,7 +66,20 @@
         <!-- ── Loading Overlay ── -->
         <div id="loading-overlay" class="overlay">
             <div class="spinner"></div>
-            <div class="overlay-text">INITIALIZING SIMULATION...</div>
+            <p>Initializing Simulation...</p>
+        </div>
+
+        <!-- API Key Modal -->
+        <div id="api-key-modal" class="overlay hidden">
+            <div class="modal">
+                <h2>API Key Configuration</h2>
+                <p>Enter your API key to access the simulation.</p>
+                <input type="password" id="api-key-input" placeholder="Enter API key..." />
+                <div class="modal-buttons">
+                    <button id="btn-save-api-key" class="ctrl-btn primary">Save</button>
+                    <button id="btn-cancel-api-key" class="ctrl-btn">Cancel</button>
+                </div>
+            </div>
         </div>
 
     </div>
