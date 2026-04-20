@@ -1,102 +1,315 @@
-# Astrosis — Satellite Physics Simulator API
+# Astrosis - Satellite Physics Simulator
 
-A high-performance satellite propagation API service with a C++ physics engine, PostgreSQL database, Redis caching, and multi-tenant simulation contexts.
+A high-fidelity orbital mechanics simulation platform for satellite constellation management, conjunction detection, and debris tracking. Features a C++ physics engine with RK4 integrator and J2 perturbation, FastAPI backend, and real-time web visualization.
+
+## Features
+
+- **High-Fidelity Physics Engine**: C++ implementation with RK4 integrator and J2 perturbation
+- **Conjunction Detection**: Real-time collision warning system with configurable thresholds
+- **Maneuver Planning**: Automated evasion and recovery maneuver calculation
+- **Multi-Tenancy**: Support for multiple isolated simulation contexts
+- **TLE Integration**: Import satellite data from Celestrak Two-Line Element sets
+- **Real-Time Visualization**: Web-based ground track display with satellite and debris clouds
+- **API Authentication**: Secure API key-based authentication with rate limiting
+- **Structured Logging**: JSON logging with correlation IDs for distributed tracing
 
 ## Architecture
 
 ```
-C++ physics engine → pybind11 → Python FastAPI backend → REST API → HTML/Canvas frontend
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend       │    │  C++ Physics    │
+│   (HTML/JS)     │◄──►│   (FastAPI)     │◄──►│  Engine         │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │  PostgreSQL/    │
+                       │  SQLite DB      │
+                       └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │     Redis       │
+                       │   (Cache/Rate)  │
+                       └─────────────────┘
 ```
 
-## Physics engine
+## Installation
 
-| Module | Description |
-|---|---|
-| `propagator.cpp` | RK4 orbital propagation with J2 perturbation |
+### Prerequisites
 
-**Constants**: μ = 398600.4418 km³/s², Rₑ = 6378.137 km, J₂ = 1.08263×10⁻³
+- Python 3.10+
+- PostgreSQL 14+ (or SQLite for development)
+- Redis 6+ (optional, for caching and rate limiting)
+- CMake 3.12+ (for building C++ physics engine)
+- C++17 compatible compiler
 
-## Features
+### Backend Setup
 
-- **Orbital Propagation**: RK4 integration with J2 Earth oblateness perturbation
-- **Real-time Visualization**: Ground track map showing satellite and debris positions
-- **Interactive Simulation**: Step forward in time to observe orbital evolution
-- **Multi-object Support**: Simulate satellites and debris clouds simultaneously
+1. Clone the repository:
+```bash
+git clone https://github.com/UtkarshJoshiNtl/Astrosis.git
+cd Astrosis
+```
 
-## Local setup
+2. Create a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. Configure environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+Required environment variables:
+```bash
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/astrosis
+
+# Redis (optional but recommended)
+REDIS_URL=redis://localhost:6379/0
+
+# Security (REQUIRED - generate strong secrets)
+SECRET_KEY=your-secret-key-here
+
+# Physics engine
+PHYSICS_ENGINE_PATH=./backend/cpp/build/physics_engine.so
+```
+
+5. Build the C++ physics engine:
+```bash
+cd backend/cpp
+mkdir build
+cd build
+cmake ..
+make -j$(nproc)
+cd ../../..
+```
+
+6. Initialize the database:
+```bash
+python scripts/init_db.py
+```
+
+7. Generate initial simulation state:
+```bash
+python scripts/generate_initial_state.py
+```
+
+### Frontend Setup
+
+The frontend is served statically by the backend. No additional setup required.
+
+## Running the Application
+
+### Development Server
 
 ```bash
-# Build C++ engine
-cd backend/cpp && mkdir -p build && cd build
-cmake -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir) -DPython3_EXECUTABLE=$(which python3) ..
-make -j4
-cd ../../..
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Generate initial state data
-python3 scripts/generate_initial_state.py
-
-# Run server
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## API endpoints
+The application will be available at:
+- Frontend: http://localhost:8000
+- API docs: http://localhost:8000/docs
+- API health: http://localhost:8000/api/health
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Service health and state summary |
-| `POST` | `/api/simulate/step` | Advance simulation by N seconds |
-| `GET` | `/api/visualization/snapshot` | Get current constellation state |
-| `POST` | `/api/telemetry` | Ingest batch object states |
+### Production Deployment
+
+Use a production ASGI server like Gunicorn with Uvicorn workers:
+
+```bash
+gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+```
+
+## API Documentation
 
 ### Authentication
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/auth/register` | Register a new user account |
-| `POST` | `/api/auth/login` | Login with email/password |
-| `POST` | `/api/auth/api-keys` | Create a new API key |
-| `GET` | `/api/auth/api-keys` | List user's API keys |
-| `DELETE` | `/api/auth/api-keys/{key_id}` | Delete an API key |
+All API endpoints require authentication via API key. Include the key in the `X-API-Key` header:
 
-### Simulation Contexts
+```bash
+curl -H "X-API-Key: your-api-key" http://localhost:8000/api/health
+```
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/simulations` | Create a new simulation context |
-| `GET` | `/api/simulations` | List user's simulations |
-| `GET` | `/api/simulations/{id}` | Get simulation details |
-| `DELETE` | `/api/simulations/{id}` | Delete a simulation |
-| `GET` | `/api/simulations/{id}/state` | Get simulation state summary |
+### Key Endpoints
 
-### TLE Data
+#### Simulation Control
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/tle/groups` | Get available satellite groups |
-| `POST` | `/api/tle/ingest` | Ingest TLE data from Celestrak |
-| `POST` | `/api/tle/import` | Import a satellite from TLE |
-| `POST` | `/api/tle/import-group` | Import a satellite group |
+- `POST /api/simulate/step` - Advance simulation by specified time
+- `GET /api/visualization/snapshot` - Get current simulation state
+- `POST /api/telemetry` - Ingest satellite/debris telemetry
 
-### Propagation (C++ Physics Engine)
+#### TLE Management
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/propagation/propagate` | Propagate a single satellite state |
-| `POST` | `/api/propagation/propagate/batch` | Propagate multiple satellite states |
-| `POST` | `/api/propagation/propagate/steps` | Propagate with intermediate steps |
-| `POST` | `/api/propagation/conjunctions` | Detect satellite conjunctions |
-| `GET` | `/api/propagation/health` | Check C++ physics engine health |
+- `GET /api/tle/groups` - List available satellite groups
+- `POST /api/tle/fetch-group` - Fetch TLE data for a group
+- `POST /api/tle/import-group` - Import satellites from TLE group
 
-## Roadmap
+#### Propagation
 
-- ✅ Live TLE ingestion from Celestrak
-- ✅ Multi-tenant simulation contexts
-- ✅ API key authentication and rate limiting
-- ✅ PostgreSQL database persistence
-- ✅ Redis caching layer
-- Atmospheric drag model (NRLMSISE-00)
-- 3D orbit visualization
-- Public hosted API deployment
+- `POST /api/propagation/propagate` - Propagate state vector
+- `POST /api/propagation/conjunction` - Detect conjunctions
+
+#### Authentication
+
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login and get JWT token
+- `POST /api/auth/api-keys` - Create new API key
+
+Full API documentation available at `/docs` (Swagger UI) and `/redoc` (ReDoc).
+
+## Configuration
+
+### Database Configuration
+
+PostgreSQL is recommended for production. SQLite can be used for development:
+
+```bash
+# Development (SQLite)
+DATABASE_URL=sqlite:///./astrosis.db
+
+# Production (PostgreSQL)
+DATABASE_URL=postgresql://user:password@localhost:5432/astrosis
+```
+
+### Rate Limiting
+
+Configure rate limits per user tier in `.env`:
+
+```bash
+RATE_LIMIT_FREE=100      # requests per minute
+RATE_LIMIT_PRO=1000
+RATE_LIMIT_ENTERPRISE=10000
+```
+
+### Physics Constants
+
+Configure propulsion and physics parameters:
+
+```bash
+ISP=300.0                # Specific impulse (s)
+G0=0.00980665           # Standard gravity (km/s²)
+DRY_MASS=500.0          # Satellite dry mass (kg)
+INITIAL_FUEL=50.0       # Initial fuel (kg)
+MAX_DV=0.015            # Maximum delta-v per maneuver (km/s)
+COOLDOWN_S=600.0        # Maneuver cooldown (s)
+```
+
+## Testing
+
+### Run Physics Engine Tests
+
+```bash
+python test_physics.py
+```
+
+### Run Backend Tests
+
+```bash
+pytest tests/
+```
+
+## Development Guidelines
+
+### Code Style
+
+- Python: Follow PEP 8
+- C++: Follow Google C++ Style Guide
+- JavaScript: Follow Airbnb Style Guide
+
+### Adding New Features
+
+1. Create feature branch: `git checkout -b feature/name`
+2. Implement feature with tests
+3. Update documentation
+4. Submit pull request
+
+### Physics Engine Extensions
+
+To add new physics features:
+
+1. Add function to C++ header (`backend/cpp/propagator.h`)
+2. Implement in C++ (`backend/cpp/propagator.cpp`)
+3. Add pybind11 bindings
+4. Add Python wrapper in `backend/core/physics/engine.py`
+5. Add fallback implementation in `backend/core/physics/fallback.py`
+
+## Troubleshooting
+
+### C++ Build Fails
+
+Ensure you have CMake 3.12+ and a C++17 compiler:
+
+```bash
+cmake --version  # Should be 3.12+
+g++ --version    # Should support C++17
+```
+
+### Database Connection Errors
+
+Check that PostgreSQL is running and credentials in `.env` are correct:
+
+```bash
+psql -h localhost -U user -d astrosis
+```
+
+### Redis Connection Errors
+
+Redis is optional. If not available, caching and rate limiting will be disabled with a warning. To run Redis:
+
+```bash
+redis-server
+```
+
+### Physics Engine Not Loading
+
+If the C++ engine fails to load, the system will automatically fall back to the Python implementation. Check the build output:
+
+```bash
+cd backend/cpp/build
+make VERBOSE=1
+```
+
+## Performance Tips
+
+- Use PostgreSQL instead of SQLite for production
+- Enable Redis for caching and rate limiting
+- Use the C++ physics engine for large-scale simulations
+- Configure appropriate rate limits for your use case
+- Use connection pooling for database connections
+
+## Security Considerations
+
+- Never commit `.env` files or API keys
+- Use strong, randomly generated SECRET_KEY
+- Enable HTTPS in production
+- Regularly rotate API keys
+- Monitor rate limiting logs for abuse
+
+## License
+
+[Your License Here]
+
+## Contributing
+
+Contributions are welcome! Please read our contributing guidelines before submitting pull requests.
+
+## Support
+
+For issues and questions:
+- GitHub Issues: https://github.com/UtkarshJoshiNtl/Astrosis/issues
+- Documentation: https://github.com/UtkarshJoshiNtl/Astrosis/wiki
+
+## Acknowledgments
+
+- Celestrak for TLE satellite data
+- Skyfield library for orbital mechanics calculations
+- pybind11 for Python-C++ integration
