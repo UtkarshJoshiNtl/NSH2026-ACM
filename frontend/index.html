@@ -78,10 +78,22 @@
             <span>v1.0.0</span>
         </footer>
 
-        <!-- ── Loading Overlay ── -->
+        <!-- Loading Overlay -->
         <div id="loading-overlay" class="overlay">
             <div class="spinner"></div>
             <p>Initializing Simulation...</p>
+        </div>
+
+        <!-- Conjunction Alert Notification -->
+        <div id="conjunction-alert" class="conjunction-alert hidden">
+            <div class="alert-content">
+                <span class="alert-icon">⚠️</span>
+                <div class="alert-message">
+                    <h3>Conjunction Warning</h3>
+                    <p id="alert-text">Critical conjunction detected</p>
+                </div>
+                <button id="btn-dismiss-alert" class="alert-dismiss">×</button>
+            </div>
         </div>
 
         <!-- API Key Modal -->

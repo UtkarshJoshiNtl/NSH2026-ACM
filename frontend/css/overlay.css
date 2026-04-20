@@ -42,3 +42,64 @@
     color: var(--accent);
     letter-spacing: 2px;
 }
+
+/* Conjunction Alert Notification */
+.conjunction-alert {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: rgba(248, 81, 73, 0.15);
+    border: 1px solid rgba(248, 81, 73, 0.5);
+    border-radius: 8px;
+    padding: 16px;
+    z-index: 999;
+    max-width: 400px;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.alert-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.alert-icon {
+    font-size: 24px;
+}
+
+.alert-message h3 {
+    margin: 0 0 4px 0;
+    font-size: 16px;
+    color: #f85149;
+}
+
+.alert-message p {
+    margin: 0;
+    font-size: 13px;
+    color: #e0e0e0;
+}
+
+.alert-dismiss {
+    background: transparent;
+    border: none;
+    color: #a0a0b0;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.alert-dismiss:hover {
+    color: #e0e0e0;
+}

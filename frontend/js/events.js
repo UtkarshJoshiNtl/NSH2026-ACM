@@ -7,6 +7,16 @@ import { stepSim, setApiKey, getApiKey } from './api.js';
 import { getEl } from './utils/dom.js';
 
 export function initEvents() {
+    // ── Conjunction Alert Dismissal ───────────────────────────────────────────────
+    const btnDismissAlert = getEl('btn-dismiss-alert');
+    const conjunctionAlert = getEl('conjunction-alert');
+    
+    if (btnDismissAlert && conjunctionAlert) {
+        btnDismissAlert.addEventListener('click', () => {
+            conjunctionAlert.classList.add('hidden');
+        });
+    }
+
     // ── API Key Modal ────────────────────────────────────────────────────────────
     const btnApiKey = getEl('btn-api-key');
     const modal = getEl('api-key-modal');
