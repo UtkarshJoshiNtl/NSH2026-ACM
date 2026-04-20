@@ -1,6 +1,6 @@
-# Astrosis — Satellite Physics Simulator
+# Astrosis — Satellite Physics Simulator API
 
-A web-based orbital mechanics simulator with a high-performance C++ physics engine and Python API.
+A high-performance satellite propagation API service with a C++ physics engine, PostgreSQL database, Redis caching, and multi-tenant simulation contexts.
 
 ## Architecture
 
@@ -51,9 +51,42 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 | `GET` | `/api/visualization/snapshot` | Get current constellation state |
 | `POST` | `/api/telemetry` | Ingest batch object states |
 
+### Authentication
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Register a new user account |
+| `POST` | `/api/auth/login` | Login with email/password |
+| `POST` | `/api/auth/api-keys` | Create a new API key |
+| `GET` | `/api/auth/api-keys` | List user's API keys |
+| `DELETE` | `/api/auth/api-keys/{key_id}` | Delete an API key |
+
+### Simulation Contexts
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/simulations` | Create a new simulation context |
+| `GET` | `/api/simulations` | List user's simulations |
+| `GET` | `/api/simulations/{id}` | Get simulation details |
+| `DELETE` | `/api/simulations/{id}` | Delete a simulation |
+| `GET` | `/api/simulations/{id}/state` | Get simulation state summary |
+
+### TLE Data
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/tle/groups` | Get available satellite groups |
+| `POST` | `/api/tle/ingest` | Ingest TLE data from Celestrak |
+| `POST` | `/api/tle/import` | Import a satellite from TLE |
+| `POST` | `/api/tle/import-group` | Import a satellite group |
+
 ## Roadmap
 
-- Live TLE ingestion from Celestrak
+- ✅ Live TLE ingestion from Celestrak
+- ✅ Multi-tenant simulation contexts
+- ✅ API key authentication and rate limiting
+- ✅ PostgreSQL database persistence
+- ✅ Redis caching layer
 - Atmospheric drag model (NRLMSISE-00)
 - 3D orbit visualization
-- Public hosted API
+- Public hosted API deployment
