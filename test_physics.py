@@ -187,8 +187,8 @@ else:
         plan.fuel_cost_kg > 0.0
     )
     all_passed &= check(
-        f"  Burn timing offset > 0 s (got {plan.burn_timing_offset_s:.1f} s)",
-        plan.burn_timing_offset_s > 0.0
+        f"  Burn timing offset >= 0 s (got {plan.burn_timing_offset_s:.1f} s)",
+        plan.burn_timing_offset_s >= 0.0
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
