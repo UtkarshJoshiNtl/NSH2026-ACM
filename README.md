@@ -94,6 +94,13 @@ make -j$(nproc)
 cd ../../..
 ```
 
+**Note**: If CMake cannot find pybind11, install it first:
+```bash
+pip install pybind11
+# Or specify the path if using user installation:
+cmake .. -Dpybind11_DIR=/path/to/pybind11/share/cmake/pybind11
+```
+
 6. Initialize the database:
 ```bash
 python scripts/init_db.py
