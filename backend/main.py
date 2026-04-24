@@ -17,7 +17,10 @@ from backend.routers import (
     simulations,
     propagation,
     export,
+    data_analysis,
+    celery_monitor,
 )
+from backend.celery_app import celery_app
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
 from backend.rate_limit import rate_limit_middleware
@@ -55,6 +58,8 @@ app.include_router(auth.router, prefix="/api/auth")
 app.include_router(simulations.router, prefix="/api")
 app.include_router(propagation.router, prefix="/api/propagation")
 app.include_router(export.router, prefix="/api")
+app.include_router(data_analysis.router, prefix="/api/data")
+app.include_router(celery_monitor.router, prefix="/api/celery")
 
 # Static files for frontend
 import os
@@ -68,7 +73,7 @@ async def health_check():
     """Service health and state summary with dependency verification."""
     health_status = {
         "status": "healthy",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "dependencies": {},
         "state": state_mgr.get_summary(),
     }
@@ -95,16 +100,19 @@ async def health_check():
         health_status["status"] = "degraded"
         health_status["dependencies"]["redis"] = f"disconnected: {str(e)}"
 
-    # Check physics engine
+    # Check Celery workers
     try:
-        from backend.core.physics.loader import physics as _physics
-
-        if _physics:
-            health_status["dependencies"]["physics_engine"] = "loaded"
+        inspect = celery_app.control.inspect()
+        pong = inspect.ping()
+        if pong:
+            health_status["dependencies"]["celery"] = f"connected ({len(pong)} workers)"
         else:
-            health_status["dependencies"]["physics_engine"] = "using_fallback"
+            health_status["dependencies"]["celery"] = "no_workers"
     except Exception as e:
-        health_status["dependencies"]["physics_engine"] = f"error: {str(e)}"
+        health_status["dependencies"]["celery"] = f"disconnected: {str(e)}"
+
+    # Physics engine (Python-only implementation)
+    health_status["dependencies"]["physics_engine"] = "python_native"
 
     return health_status
 
