@@ -1,6 +1,10 @@
 # Astrosis - Satellite Physics Simulator
 
-A high-fidelity orbital mechanics simulation platform for satellite constellation management, conjunction detection, and debris tracking. Features a C++ physics engine with RK4 integrator and J2 perturbation, FastAPI backend, and real-time web visualization.
+**Production-ready satellite constellation management system with advanced features beyond NSH 2026 requirements.**
+
+A high-fidelity orbital mechanics simulation platform for satellite constellation management, conjunction detection, and debris tracking. Features a C++ physics engine with RK4 integrator, J2/J3/J4 perturbations, third-body effects, atmospheric drag, solar radiation pressure, FastAPI backend, multi-tenancy, authentication, and real-time web visualization.
+
+**Note**: For NSH 2026 IITD Hackathon compliance, use the `main` branch. This `v2` branch includes advanced production features.
 
 ## Features
 
