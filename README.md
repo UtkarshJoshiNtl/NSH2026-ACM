@@ -1,37 +1,27 @@
-# Astrosis - Satellite Physics Simulator
+# Astrosis - Autonomous Constellation Manager
 
-A high-fidelity orbital mechanics simulation platform for satellite constellation management, conjunction detection, and debris tracking. Features a C++ physics engine with RK4 integrator and J2 perturbation, FastAPI backend, and real-time web visualization.
+**NSH 2026 IITD Hackathon - Orbital Debris Avoidance & Constellation Management System**
 
-## Features
+A high-performance autonomous constellation management system designed for the National Space Hackathon 2026. Features J2-aware RK4 propagation, real-time conjunction detection, autonomous collision avoidance, and mission control visualization.
 
-- **High-Fidelity Physics Engine**: C++ implementation with RK4 integrator and J2 perturbation
-- **Conjunction Detection**: Real-time collision warning system with configurable thresholds
-- **Maneuver Planning**: Automated evasion and recovery maneuver calculation
-- **Multi-Tenancy**: Support for multiple isolated simulation contexts
-- **TLE Integration**: Import satellite data from Celestrak Two-Line Element sets
-- **Real-Time Visualization**: Web-based ground track display with satellite and debris clouds
-- **API Authentication**: Secure API key-based authentication with rate limiting
-- **Structured Logging**: JSON logging with correlation IDs for distributed tracing
+## Features (NSH 2026 Compliant)
+
+- **J2-Aware Propagation**: RK4 integrator with Earth's J2 zonal harmonic perturbation
+- **Conjunction Detection**: Real-time collision warning with <100m critical threshold
+- **Autonomous Collision Avoidance**: Evasion and recovery maneuver calculation
+- **RTN Navigation**: Maneuver planning in Radial-Transverse-Normal frame
+- **Ground Station LOS**: Line-of-sight communication with Earth rotation
+- **Fuel Management**: Tsiolkovsky rocket equation with EOL graveyard orbit
+- **Real-Time Visualization**: Ground track map, bullseye plot, fuel gauges, Gantt timeline
+- **WebSocket Streaming**: 2-second telemetry update intervals
 
 ## Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │  C++ Physics    │
-│   (HTML/JS)     │◄──►│   (FastAPI)     │◄──►│  Engine         │
+│   Frontend      │    │   Backend       │    │  Physics Engine │
+│   (D3.js/HTML)  │◄──►│   (FastAPI)     │◄──►│  (Python/C++)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌─────────────────┐
-                       │  PostgreSQL/    │
-                       │  SQLite DB      │
-                       └─────────────────┘
-                              │
-                              ▼
-                       ┌─────────────────┐
-                       │     Redis       │
-                       │   (Cache/Rate)  │
-                       └─────────────────┘
 ```
 
 ## Installation
@@ -39,16 +29,15 @@ A high-fidelity orbital mechanics simulation platform for satellite constellatio
 ### Prerequisites
 
 - Python 3.10+
-- PostgreSQL 14+ (or SQLite for development)
-- Redis 6+ (optional, for caching and rate limiting)
-- CMake 3.12+ (for building C++ physics engine)
-- C++17 compatible compiler
+- Docker (for deployment)
+- CMake 3.12+ (optional, for C++ physics engine)
+- C++17 compatible compiler (optional)
 
 ### Backend Setup
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/UtkarshJoshiNtl/Astrosis.git
+git clone https://github.com/UtkarshJoshiNtl/NSH2026-ACM.git
 cd Astrosis
 ```
 
@@ -63,28 +52,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Configure environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
-
-Required environment variables:
-```bash
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/astrosis
-
-# Redis (optional but recommended)
-REDIS_URL=redis://localhost:6379/0
-
-# Security (REQUIRED - generate strong secrets)
-SECRET_KEY=your-secret-key-here
-
-# Physics engine
-PHYSICS_ENGINE_PATH=./backend/cpp/build/physics_engine.so
-```
-
-5. Build the C++ physics engine:
+4. (Optional) Build the C++ physics engine:
 ```bash
 cd backend/cpp
 mkdir build
@@ -94,22 +62,7 @@ make -j$(nproc)
 cd ../../..
 ```
 
-**Note**: If CMake cannot find pybind11, install it first:
-```bash
-pip install pybind11
-# Or specify the path if using user installation:
-cmake .. -Dpybind11_DIR=/path/to/pybind11/share/cmake/pybind11
-```
-
-6. Initialize the database:
-```bash
-python scripts/init_db.py
-```
-
-7. Generate initial simulation state:
-```bash
-python scripts/generate_initial_state.py
-```
+**Note**: The system will automatically fall back to pure Python if C++ engine is not built.
 
 ### Frontend Setup
 
@@ -128,87 +81,62 @@ The application will be available at:
 - API docs: http://localhost:8000/docs
 - API health: http://localhost:8000/api/health
 
-### Production Deployment
-
-Use a production ASGI server like Gunicorn with Uvicorn workers:
+### Docker Deployment (NSH 2026 Requirement)
 
 ```bash
-gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+docker build -t astrosis .
+docker run -p 8000:8000 astrosis
 ```
 
-## API Documentation
+## API Documentation (NSH 2026 Compliant)
 
-### Authentication
+### Required Endpoints
 
-All API endpoints require authentication via API key. Include the key in the `X-API-Key` header:
-
-```bash
-curl -H "X-API-Key: your-api-key" http://localhost:8000/api/health
+#### Telemetry Ingestion (Section 4.1)
+```http
+POST /api/telemetry
 ```
+Accepts high-frequency state vector updates for satellites and debris.
 
-### Key Endpoints
+#### Maneuver Scheduling (Section 4.2)
+```http
+POST /api/maneuver/schedule
+```
+Submit evasion and recovery burn sequences with validation.
 
-#### Simulation Control
+#### Simulation Fast-Forward (Section 4.3)
+```http
+POST /api/simulate/step
+```
+Advance simulation by specified time step.
 
-- `POST /api/simulate/step` - Advance simulation by specified time
-- `GET /api/visualization/snapshot` - Get current simulation state
-- `POST /api/telemetry` - Ingest satellite/debris telemetry
-
-#### TLE Management
-
-- `GET /api/tle/groups` - List available satellite groups
-- `POST /api/tle/fetch-group` - Fetch TLE data for a group
-- `POST /api/tle/import-group` - Import satellites from TLE group
+#### Visualization Snapshot (Section 6.3)
+```http
+GET /api/visualization/snapshot
+```
+Get current simulation state for frontend rendering.
 
 #### Propagation
-
-- `POST /api/propagation/propagate` - Propagate state vector
-- `POST /api/propagation/conjunction` - Detect conjunctions
-
-#### Authentication
-
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login and get JWT token
-- `POST /api/auth/api-keys` - Create new API key
-
-Full API documentation available at `/docs` (Swagger UI) and `/redoc` (ReDoc).
-
-## Configuration
-
-### Database Configuration
-
-PostgreSQL is recommended for production. SQLite can be used for development:
-
-```bash
-# Development (SQLite)
-DATABASE_URL=sqlite:///./astrosis.db
-
-# Production (PostgreSQL)
-DATABASE_URL=postgresql://user:password@localhost:5432/astrosis
+```http
+POST /api/propagation/propagate
+POST /api/propagation/conjunction
 ```
+Propagate state vectors and detect conjunctions.
 
-### Rate Limiting
+Full API documentation available at `/docs` (Swagger UI).
 
-Configure rate limits per user tier in `.env`:
+## Physics Constants (NSH 2026 Compliant)
 
-```bash
-RATE_LIMIT_FREE=100      # requests per minute
-RATE_LIMIT_PRO=1000
-RATE_LIMIT_ENTERPRISE=10000
-```
+The following constants are configured in `backend/config.py`:
 
-### Physics Constants
-
-Configure propulsion and physics parameters:
-
-```bash
-ISP=300.0                # Specific impulse (s)
-G0=0.00980665           # Standard gravity (km/s²)
-DRY_MASS=500.0          # Satellite dry mass (kg)
-INITIAL_FUEL=50.0       # Initial fuel (kg)
-MAX_DV=0.015            # Maximum delta-v per maneuver (km/s)
-COOLDOWN_S=600.0        # Maneuver cooldown (s)
-```
+- **Dry Mass (mdry)**: 500.0 kg
+- **Initial Propellant Mass (mfuel)**: 50.0 kg
+- **Specific Impulse (Isp)**: 300.0 s
+- **Maximum Thrust Limit**: |∆⃗v| ≤ 15.0 m/s per burn
+- **Thermal Cooldown**: 600 seconds between burns
+- **Station-Keeping Box**: ±10 km spherical radius
+- **Critical Conjunction Threshold**: < 100 meters
+- **EOL Fuel Threshold**: < 5% fuel
 
 ## Testing
 
@@ -218,105 +146,37 @@ COOLDOWN_S=600.0        # Maneuver cooldown (s)
 python test_physics.py
 ```
 
-### Run Backend Tests
+## Deployment Requirements (NSH 2026)
 
-```bash
-pytest tests/
+- **Dockerfile**: Must use `ubuntu:22.04` base image
+- **Port Binding**: Must expose port 8000 on 0.0.0.0
+- **API Endpoints**: Must implement all required NSH 2026 endpoints
+
+## Project Structure
+
 ```
-
-## Development Guidelines
-
-### Code Style
-
-- Python: Follow PEP 8
-- C++: Follow Google C++ Style Guide
-- JavaScript: Follow Airbnb Style Guide
-
-### Adding New Features
-
-1. Create feature branch: `git checkout -b feature/name`
-2. Implement feature with tests
-3. Update documentation
-4. Submit pull request
-
-### Physics Engine Extensions
-
-To add new physics features:
-
-1. Add function to C++ header (`backend/cpp/propagator.h`)
-2. Implement in C++ (`backend/cpp/propagator.cpp`)
-3. Add pybind11 bindings
-4. Add Python wrapper in `backend/core/physics/engine.py`
-5. Add fallback implementation in `backend/core/physics/fallback.py`
-
-## Troubleshooting
-
-### C++ Build Fails
-
-Ensure you have CMake 3.12+ and a C++17 compiler:
-
-```bash
-cmake --version  # Should be 3.12+
-g++ --version    # Should support C++17
+Astrosis/
+├── backend/                # FastAPI backend
+│   ├── main.py            # API entry point
+│   ├── config.py          # Configuration
+│   ├── core/              # Core logic
+│   │   ├── physics/       # Physics engine (J2+RK4)
+│   │   ├── navigation.py  # RTN frame navigation
+│   │   ├── ground_station.py # LOS calculations
+│   │   ├── decision_service.py # Autonomous logic
+│   │   └── state_manager.py # Simulation state
+│   └── routers/           # API endpoints
+│       ├── telemetry.py   # Telemetry ingestion
+│       ├── simulate.py    # Simulation control
+│       ├── visualization.py # Snapshot endpoint
+│       └── propagation.py # Propagation & conjunction
+├── frontend/              # D3.js visualization
+├── data/                  # Ground stations, catalog
+├── Dockerfile             # Ubuntu 22.04 base
+├── requirements.txt        # Python dependencies
+└── README.md              # This file
 ```
-
-### Database Connection Errors
-
-Check that PostgreSQL is running and credentials in `.env` are correct:
-
-```bash
-psql -h localhost -U user -d astrosis
-```
-
-### Redis Connection Errors
-
-Redis is optional. If not available, caching and rate limiting will be disabled with a warning. To run Redis:
-
-```bash
-redis-server
-```
-
-### Physics Engine Not Loading
-
-If the C++ engine fails to load, the system will automatically fall back to the Python implementation. Check the build output:
-
-```bash
-cd backend/cpp/build
-make VERBOSE=1
-```
-
-## Performance Tips
-
-- Use PostgreSQL instead of SQLite for production
-- Enable Redis for caching and rate limiting
-- Use the C++ physics engine for large-scale simulations
-- Configure appropriate rate limits for your use case
-- Use connection pooling for database connections
-
-## Security Considerations
-
-- Never commit `.env` files or API keys
-- Use strong, randomly generated SECRET_KEY
-- Enable HTTPS in production
-- Regularly rotate API keys
-- Monitor rate limiting logs for abuse
 
 ## License
 
-[Your License Here]
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines before submitting pull requests.
-
-## Support
-
-For issues and questions:
-- GitHub Issues: https://github.com/UtkarshJoshiNtl/Astrosis/issues
-- Documentation: https://github.com/UtkarshJoshiNtl/Astrosis/wiki
-
-## Acknowledgments
-
-- Celestrak for TLE satellite data
-- Skyfield library for orbital mechanics calculations
-- pybind11 for Python-C++ integration
+Developed for the **National Space Hackathon 2026** at Indian Institute of Technology, Delhi.

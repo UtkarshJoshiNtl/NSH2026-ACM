@@ -12,25 +12,15 @@ from backend.routers import (
     telemetry,
     simulate,
     visualization,
-    tle,
-    auth,
-    simulations,
     propagation,
-    export,
-    data_analysis,
-    celery_monitor,
 )
-from backend.celery_app import celery_app
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
-from backend.rate_limit import rate_limit_middleware
-from backend.logging_config import setup_logging, get_correlation_id, set_correlation_id
-from backend.database import engine
-from backend.cache import RedisCache
-from backend.tle_scheduler import tle_scheduler
 
-# Configure structured logging
-logger = setup_logging()
+# Configure basic logging
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # WebSocket client management
 ws_clients = set()
@@ -42,24 +32,17 @@ app = FastAPI(title="Astrosis — Satellite Physics Simulator")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.middleware("http")(rate_limit_middleware)
 
-# Routers
+# Routers (NSH 2026 compliant endpoints only)
 app.include_router(telemetry.router, prefix="/api")
 app.include_router(simulate.router, prefix="/api")
 app.include_router(visualization.router, prefix="/api")
-app.include_router(tle.router, prefix="/api")
-app.include_router(auth.router, prefix="/api/auth")
-app.include_router(simulations.router, prefix="/api")
 app.include_router(propagation.router, prefix="/api/propagation")
-app.include_router(export.router, prefix="/api")
-app.include_router(data_analysis.router, prefix="/api/data")
-app.include_router(celery_monitor.router, prefix="/api/celery")
 
 # Static files for frontend
 import os
@@ -70,61 +53,11 @@ if os.path.exists("frontend"):
 
 @app.get("/api/health")
 async def health_check():
-    """Service health and state summary with dependency verification."""
-    health_status = {
-        "status": "healthy",
-        "version": "2.0.0",
-        "dependencies": {},
-        "state": state_mgr.get_summary(),
-    }
-
-    # Check database connectivity
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        health_status["dependencies"]["database"] = "connected"
-    except Exception as e:
-        health_status["status"] = "degraded"
-        health_status["dependencies"]["database"] = f"disconnected: {str(e)}"
-
-    # Check Redis connectivity
-    try:
-        redis_cache = RedisCache()
-        if redis_cache.available:
-            redis_cache.set("health_check", "ok", 1)
-            redis_cache.get("health_check")
-            health_status["dependencies"]["redis"] = "connected"
-        else:
-            health_status["dependencies"]["redis"] = "disabled (optional)"
-    except Exception as e:
-        health_status["status"] = "degraded"
-        health_status["dependencies"]["redis"] = f"disconnected: {str(e)}"
-
-    # Check Celery workers
-    try:
-        inspect = celery_app.control.inspect()
-        pong = inspect.ping()
-        if pong:
-            health_status["dependencies"]["celery"] = f"connected ({len(pong)} workers)"
-        else:
-            health_status["dependencies"]["celery"] = "no_workers"
-    except Exception as e:
-        health_status["dependencies"]["celery"] = f"disconnected: {str(e)}"
-
-    # Physics engine (Python-only implementation)
-    health_status["dependencies"]["physics_engine"] = "python_native"
-
-    return health_status
-
-
-@app.post("/api/tle/refresh")
-async def manual_tle_refresh():
-    """Manually trigger TLE data refresh."""
-    count = await tle_scheduler.refresh_now()
+    """Service health and state summary."""
     return {
-        "status": "success",
-        "refreshed_count": count,
-        "message": f"Manually refreshed {count} TLE entries",
+        "status": "healthy",
+        "version": "1.0.0",
+        "state": state_mgr.get_summary(),
     }
 
 
@@ -132,10 +65,7 @@ async def manual_tle_refresh():
 async def startup_event():
     # Load initial state from disk (gracefully handles missing files)
     load_initial_state_from_disk(state_mgr)
-
-    # Start TLE auto-refresh scheduler
-    await tle_scheduler.start()
-    logger.info("TLE scheduler started")
+    logger.info("Initial state loaded")
 
     # Start WebSocket broadcast loop
     ws_task = asyncio.create_task(_websocket_broadcast_loop())
@@ -145,10 +75,6 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    # Stop TLE scheduler
-    await tle_scheduler.stop()
-    logger.info("TLE scheduler stopped")
-
     # Cancel background tasks
     for task in _background_tasks:
         task.cancel()
