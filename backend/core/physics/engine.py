@@ -4,8 +4,10 @@ NSH 2026 compliant: J2 perturbation only.
 """
 
 import math
+import numpy as np
+from scipy.spatial import cKDTree
 from .loader import physics as _physics
-from .constants import DRY_MASS, ISP, G0, INITIAL_FUEL
+from .constants import DRY_MASS, ISP, G0, INITIAL_FUEL, RE
 from .fallback import rk4_py
 
 
@@ -44,19 +46,35 @@ def compute_fuel_used(delta_v: list, fuel_kg: float = INITIAL_FUEL) -> float:
 
 
 def detect_conjunctions(states: list, threshold_km: float = 1.0) -> list:
-    """Detect conjunctions between objects."""
+    """
+    Detect conjunctions between objects using KD-Tree for O(N log N) complexity.
+    NSH 2026 compliant - migrated from AutoCM.
+    """
     if _physics:
         detector = _physics.ConjunctionDetector()
         return detector.detect(states, threshold_km)
-    # Python fallback - simple distance check
+    
+    # Python fallback with KD-Tree (from AutoCM)
+    if len(states) < 2:
+        return []
+    
+    # Extract positions
+    positions = np.array([s[:3] for s in states])
+    
+    # Build KD-Tree
+    tree = cKDTree(positions)
+    
+    # Query for pairs within threshold
+    pairs = tree.query_pairs(threshold_km)
+    
+    # Convert to conjunction format
     conjunctions = []
-    for i in range(len(states)):
-        for j in range(i + 1, len(states)):
-            r1 = states[i][:3]
-            r2 = states[j][:3]
-            dist = math.sqrt(sum((r1[k] - r2[k]) ** 2 for k in range(3)))
-            if dist < threshold_km:
-                conjunctions.append([i, j, dist])
+    for i, j in pairs:
+        r1 = states[i][:3]
+        r2 = states[j][:3]
+        dist = np.linalg.norm(r1 - r2)
+        conjunctions.append([i, j, float(dist)])
+    
     return conjunctions
 
 

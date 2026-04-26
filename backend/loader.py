@@ -5,16 +5,35 @@ import logging
 logger = logging.getLogger("Astrosis-Backend")
 
 
-def load_initial_state_from_disk(state_mgr):
+def load_initial_state_from_disk(state_mgr, catalog_path=None):
     """
     Load initial satellite and debris state from JSON files if they exist.
+    Supports both AutoCM catalog.json format and separate satellite/debris files.
     If files are missing, log a warning and continue with empty state.
 
     Parameters
     ----------
     state_mgr : StateManager
         The state manager instance to load data into
+    catalog_path : str, optional
+        Path to AutoCM-style catalog.json file
     """
+    # Try AutoCM-style catalog first
+    if catalog_path and os.path.exists(catalog_path):
+        try:
+            with open(catalog_path, "r") as f:
+                catalog = json.load(f)
+            
+            satellites = catalog.get("satellites", [])
+            debris = catalog.get("debris", [])
+            
+            state_mgr.load_initial_state(satellites, debris)
+            logger.info(f"Loaded {len(satellites)} satellites and {len(debris)} debris from {catalog_path}")
+            return
+        except Exception as e:
+            logger.error(f"Failed to load catalog from {catalog_path}: {e}")
+    
+    # Fallback to separate files
     sats_path = "data/initial_satellites.json"
     debris_path = "data/initial_debris.json"
 

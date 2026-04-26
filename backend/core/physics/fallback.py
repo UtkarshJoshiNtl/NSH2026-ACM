@@ -10,10 +10,17 @@ from .constants import MU, RE, J2
 
 
 def rk4_py(state: tuple, dt: float) -> tuple:
-    """RK4 integrator for orbital propagation with J2 perturbation."""
+    """RK4 integrator for orbital propagation with J2 perturbation.
+    Includes surface trap prevention from AutoCM.
+    """
 
     def acceleration(r):
         r_mag = math.sqrt(r[0] ** 2 + r[1] ** 2 + r[2] ** 2)
+        
+        # Surface trap prevention (from AutoCM)
+        # Prevent NaN/Inf when objects get too close to Earth
+        if r_mag < 6300.0:  # Earth radius ~6371km, buffer for LEO
+            return [0.0, 0.0, 0.0]
         
         # Two-body gravity
         a_grav = [-MU / r_mag**3 * r[i] for i in range(3)]

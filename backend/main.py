@@ -1,12 +1,12 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware import Middleware
-from sqlalchemy import text
 import asyncio
 import json
 import time
+import os
 from datetime import datetime
 from backend.routers import (
     telemetry,
@@ -65,9 +65,18 @@ async def health_check():
 
 @app.on_event("startup")
 async def startup_event():
-    # Load initial state from disk (gracefully handles missing files)
-    load_initial_state_from_disk(state_mgr)
-    logger.info("Initial state loaded")
+    # Load satellite & debris catalog (from AutoCM)
+    catalog_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "data", "catalog.json"
+    )
+    if os.path.exists(catalog_path):
+        load_initial_state_from_disk(state_mgr, catalog_path)
+        logger.info(f"Catalog loaded from {catalog_path}")
+    else:
+        # Fallback to default location
+        load_initial_state_from_disk(state_mgr)
+        logger.info("Initial state loaded from default location")
 
     # Start WebSocket broadcast loop
     ws_task = asyncio.create_task(_websocket_broadcast_loop())
