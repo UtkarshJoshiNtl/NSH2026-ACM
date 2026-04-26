@@ -13,6 +13,7 @@ from backend.routers import (
     simulate,
     visualization,
     propagation,
+    maneuver,
 )
 from backend.core.state_manager import state_mgr
 from backend.loader import load_initial_state_from_disk
@@ -43,6 +44,7 @@ app.include_router(telemetry.router, prefix="/api")
 app.include_router(simulate.router, prefix="/api")
 app.include_router(visualization.router, prefix="/api")
 app.include_router(propagation.router, prefix="/api/propagation")
+app.include_router(maneuver.router, prefix="/api")
 
 # Static files for frontend
 import os
