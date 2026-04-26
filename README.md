@@ -1,37 +1,43 @@
 # Astrosis - Autonomous Constellation Manager
 
-**NSH 2026 IITD Hackathon - Orbital Debris Avoidance & Constellation Management System**
+**National Space Hackathon 2026 IITD Hackathon Submission**
 
-A high-performance autonomous constellation management system designed for the National Space Hackathon 2026. Features J2-aware RK4 propagation, real-time conjunction detection, autonomous collision avoidance, and mission control visualization.
+This is the official hackathon submission for the National Space Hackathon 2026 at Indian Institute of Technology, Delhi. The system implements autonomous constellation management with real-time collision avoidance, J2-aware orbital propagation, and comprehensive mission control visualization.
 
-## Features (NSH 2026 Compliant)
+**Note**: This branch contains the hackathon submission code. Active development continues in the `v2` branch.
+
+## Features
 
 - **J2-Aware Propagation**: RK4 integrator with Earth's J2 zonal harmonic perturbation
-- **Conjunction Detection**: Real-time collision warning with <100m critical threshold
+- **Conjunction Detection**: Real-time collision warning with KD-Tree optimization (O(N log N))
 - **Autonomous Collision Avoidance**: Evasion and recovery maneuver calculation
 - **RTN Navigation**: Maneuver planning in Radial-Transverse-Normal frame
 - **Ground Station LOS**: Line-of-sight communication with Earth rotation
 - **Fuel Management**: Tsiolkovsky rocket equation with EOL graveyard orbit
 - **Real-Time Visualization**: Ground track map, bullseye plot, fuel gauges, Gantt timeline
-- **WebSocket Streaming**: 2-second telemetry update intervals
+- **WebSocket Streaming**: Real-time telemetry updates
 
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │  Physics Engine │
-│   (D3.js/HTML)  │◄──►│   (FastAPI)     │◄──►│  (Python/C++)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend       │
+│   (D3.js/HTML)  │◄──►│   (FastAPI)     │
+└─────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                       ┌─────────────────┐
+                       │  Physics Engine │
+                       │  (Pure Python)  │
+                       └─────────────────┘
 ```
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Docker (for deployment)
-- CMake 3.12+ (optional, for C++ physics engine)
-- C++17 compatible compiler (optional)
 
 ### Backend Setup
 
@@ -43,7 +49,7 @@ cd Astrosis
 
 2. Create a virtual environment:
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
@@ -51,18 +57,6 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```bash
 pip install -r requirements.txt
 ```
-
-4. (Optional) Build the C++ physics engine:
-```bash
-cd backend/cpp
-mkdir build
-cd build
-cmake ..
-make -j$(nproc)
-cd ../../..
-```
-
-**Note**: The system will automatically fall back to pure Python if C++ engine is not built.
 
 ### Frontend Setup
 
@@ -73,7 +67,7 @@ The frontend is served statically by the backend. No additional setup required.
 ### Development Server
 
 ```bash
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+python3 -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 The application will be available at:
@@ -81,16 +75,16 @@ The application will be available at:
 - API docs: http://localhost:8000/docs
 - API health: http://localhost:8000/api/health
 
-### Docker Deployment (NSH 2026 Requirement)
+### Docker Deployment
 
 ```bash
 docker build -t astrosis .
 docker run -p 8000:8000 astrosis
 ```
 
-## API Documentation (NSH 2026 Compliant)
+## API Documentation
 
-### Required Endpoints
+### Required Endpoints (NSH 2026 Compliant)
 
 #### Telemetry Ingestion (Section 4.1)
 ```http
@@ -116,18 +110,9 @@ GET /api/visualization/snapshot
 ```
 Get current simulation state for frontend rendering.
 
-#### Propagation
-```http
-POST /api/propagation/propagate
-POST /api/propagation/conjunction
-```
-Propagate state vectors and detect conjunctions.
-
 Full API documentation available at `/docs` (Swagger UI).
 
 ## Physics Constants (NSH 2026 Compliant)
-
-The following constants are configured in `backend/config.py`:
 
 - **Dry Mass (mdry)**: 500.0 kg
 - **Initial Propellant Mass (mfuel)**: 50.0 kg
@@ -138,38 +123,24 @@ The following constants are configured in `backend/config.py`:
 - **Critical Conjunction Threshold**: < 100 meters
 - **EOL Fuel Threshold**: < 5% fuel
 
-## Testing
-
-### Run Physics Engine Tests
-
-```bash
-python test_physics.py
-```
-
-## Deployment Requirements (NSH 2026)
-
-- **Dockerfile**: Must use `ubuntu:22.04` base image
-- **Port Binding**: Must expose port 8000 on 0.0.0.0
-- **API Endpoints**: Must implement all required NSH 2026 endpoints
-
 ## Project Structure
 
 ```
 Astrosis/
 ├── backend/                # FastAPI backend
 │   ├── main.py            # API entry point
-│   ├── config.py          # Configuration
 │   ├── core/              # Core logic
-│   │   ├── physics/       # Physics engine (J2+RK4)
+│   │   ├── physics.py     # J2+RK4 physics engine
 │   │   ├── navigation.py  # RTN frame navigation
-│   │   ├── ground_station.py # LOS calculations
-│   │   ├── decision_service.py # Autonomous logic
+│   │   ├── screening.py   # KD-Tree conjunction detection
+│   │   ├── autonomy_logic.py # Autonomous decision logic
 │   │   └── state_manager.py # Simulation state
-│   └── routers/           # API endpoints
-│       ├── telemetry.py   # Telemetry ingestion
-│       ├── simulate.py    # Simulation control
-│       ├── visualization.py # Snapshot endpoint
-│       └── propagation.py # Propagation & conjunction
+│   ├── routers/           # API endpoints
+│   │   ├── rulebook_api.py # NSH 2026 compliant endpoints
+│   │   ├── telemetry.py   # Telemetry ingestion
+│   │   ├── maneuvers.py   # Maneuver scheduling
+│   │   └── auth.py        # Authentication
+│   └── services/          # Background services
 ├── frontend/              # D3.js visualization
 ├── data/                  # Ground stations, catalog
 ├── Dockerfile             # Ubuntu 22.04 base

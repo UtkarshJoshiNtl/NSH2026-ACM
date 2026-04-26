@@ -1,0 +1,407 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ORBITAL INSIGHT — Animations & Keyframes  (Glassmorphism Edition)
+   Cinema-grade micro-interactions for mission control.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   HOLOGRAPHIC SCAN LINE — sweeps down the entire screen continuously
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes holo-scan-move {
+  0%   { top: -2px; }
+  100% { top: 100vh; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CRITICAL PULSE — Red pulsing glow for CDMs and critical warnings
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes pulse-critical {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: none;
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: none;
+  }
+}
+
+.pulse-critical {
+  animation: pulse-critical 2s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FUEL LOW PULSE — Oxygen-warning style throb
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes pulse-fuel-low {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+.pulse-fuel-low {
+  animation: pulse-fuel-low 1.2s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   GREEN LIVE DOT — Telemetry heartbeat
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes pulse-live {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: none;
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.7);
+    box-shadow: none;
+  }
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse-live 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ROTATING DASHES — Bullseye critical zone spinning border
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes rotate-dash {
+  0%   { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -60; }
+}
+
+.rotating-dash {
+  animation: rotate-dash 3s linear infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   COOLDOWN STRIPES — Animated diagonal pattern
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes stripe-flow {
+  0%   { background-position: 0 0; }
+  100% { background-position: 40px 40px; }
+}
+
+.cooldown-stripes {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(243, 156, 18, 0.15) 5px,
+    rgba(243, 156, 18, 0.15) 10px
+  ) !important;
+  animation: stripe-flow 1.5s linear infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   DATA STREAM FLOW — Border light sweep on data refresh
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes data-stream-flow {
+  0%   { opacity: 0.8; filter: hue-rotate(0deg); }
+  50%  { opacity: 0.4; }
+  100% { opacity: 0; filter: hue-rotate(10deg); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   GLOW BREATHE — Ambient glow for hero glass panels
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes glow-breathe {
+  0%, 100% {
+    box-shadow: none;
+  }
+  50% {
+    box-shadow: none;
+  }
+}
+
+.glow-breathe {
+  animation: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   GLASS SHIMMER — Light sweep across frosted panels
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes glass-shimmer {
+  0% {
+    background-position: -300% 0;
+  }
+  100% {
+    background-position: 300% 0;
+  }
+}
+
+.glass-shimmer::after {
+  display: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   GLITCH TEXT — CRT interference effect for logo
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes glitch-1 {
+  0%, 100% { clip-path: inset(0 0 95% 0); transform: translate(0); }
+  10%      { clip-path: inset(40% 0 30% 0); transform: translate(-2px, 1px); }
+  20%      { clip-path: inset(80% 0 5% 0); transform: translate(2px, -1px); }
+  30%      { clip-path: inset(10% 0 70% 0); transform: translate(-1px, 2px); }
+  40%      { clip-path: inset(0 0 95% 0); transform: translate(0); }
+}
+
+@keyframes glitch-2 {
+  0%, 100% { clip-path: inset(95% 0 0 0); transform: translate(0); }
+  15%      { clip-path: inset(20% 0 50% 0); transform: translate(2px, -1px); }
+  25%      { clip-path: inset(60% 0 10% 0); transform: translate(-2px, 1px); }
+  35%      { clip-path: inset(0 0 80% 0); transform: translate(1px, -2px); }
+  45%      { clip-path: inset(95% 0 0 0); transform: translate(0); }
+}
+
+.glitch-text {
+  position: relative;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch-text::before {
+  display: none;
+}
+
+.glitch-text::after {
+  display: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   NUMBER MORPH — Smooth counting animation for stats
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes number-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); filter: brightness(1.4); }
+  100% { transform: scale(1); }
+}
+
+.number-pop {
+  animation: number-pop 0.3s ease-out;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   RADAR SWEEP — Rotating scan line in bullseye
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes radar-sweep {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   NOW LINE PULSE — Gantt timeline heartbeat
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes now-line-pulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px rgba(231, 76, 60, 0.5)); }
+  50%      { opacity: 0.5; filter: drop-shadow(0 0 12px rgba(231, 76, 60, 0.8)); }
+}
+
+.now-line {
+  animation: now-line-pulse 2s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FADE IN UP — Panel entrance stagger
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes fade-in-up {
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SLIDE IN RIGHT — Side panel reveal
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes slide-in-right {
+  0%   { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+.slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   HOVER GLOW — Interactive element hover feedback
+   ───────────────────────────────────────────────────────────────────────── */
+.hover-glow {
+  transition: all 0.3s ease;
+}
+
+.hover-glow:hover {
+  border-color: rgba(74, 158, 255, 0.12);
+  box-shadow: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   RING EXPAND — Satellite evading pulse
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes ring-expand {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   COUNT UP — Value update flash
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes count-up {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.count-update {
+  animation: count-up 0.3s ease-out;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SHIMMER — Loading/active state shimmer effect
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: var(--bg-secondary);
+  animation: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   VIGNETTE — Corner darkening  (higher z-index moved behind scanline)
+   ───────────────────────────────────────────────────────────────────────── */
+#vignette {
+  display: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TYPING CURSOR — For clock display
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes blink-cursor {
+  0%, 50%   { border-right-color: var(--blue); }
+  51%, 100% { border-right-color: transparent; }
+}
+
+.typing-cursor {
+  border-right: 2px solid var(--blue);
+  padding-right: 2px;
+  animation: blink-cursor 1s step-end infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LINE DRAW — SVG path animation
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes line-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ORBIT RING — Decorative rotating ring
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes orbit-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PARTICLE FLOAT — Background star particle drift
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes particle-float {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   MATRIX RAIN — Text rain effect (used sparingly in backdrop)
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes matrix-fall {
+  0%   { transform: translateY(-100%); opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SMOOTH TRANSITIONS
+   ───────────────────────────────────────────────────────────────────────── */
+.transition-all {
+  transition: all 0.3s ease;
+}
+
+.transition-fast {
+  transition: all 0.15s ease;
+}
+
+.transition-color {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BADGE PULSE — Status indicators
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); filter: brightness(1.2); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ELECTRIC ARC — Data connection spark
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes electric-arc {
+  0%, 100% { opacity: 0; }
+  5%       { opacity: 1; }
+  10%      { opacity: 0; }
+  15%      { opacity: 0.8; }
+  20%      { opacity: 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   GLASS BORDER GLOW — Panel border pulse on data flash
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes glass-border-glow {
+  0% {
+    border-color: rgba(74, 158, 255, 0.3);
+    box-shadow: none;
+  }
+  100% {
+    border-color: rgba(74, 158, 255, 0.08);
+    box-shadow: none;
+  }
+}
+
+.data-flash {
+  animation: glass-border-glow 1.2s ease-out forwards;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   AURORA GLOW — Subtle ambient color shifting on key panels
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes aurora-shift {
+  0%, 100% {
+    border-color: rgba(74, 158, 255, 0.08);
+  }
+  33% {
+    border-color: rgba(26, 188, 156, 0.08);
+  }
+  66% {
+    border-color: rgba(155, 89, 182, 0.08);
+  }
+}
+
+.aurora-glow {
+  animation: none;
+}

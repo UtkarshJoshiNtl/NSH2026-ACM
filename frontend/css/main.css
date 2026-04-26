@@ -1,0 +1,360 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ORBITAL INSIGHT — Main Design System
+   Mission Control Dashboard CSS Foundation
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Design Tokens ──────────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg-void:        #0d1117; /* Space Gray Void */
+  --bg-primary:     #161b22; /* Panel background */
+  --bg-secondary:   #21262d; /* Alternate background */
+  --bg-tertiary:    #30363d; /* Hover background */
+  --border-dim:     #30363d; /* Professional borders */
+  --border-glow:    #30363d; /* Glow removed */
+
+  /* Text */
+  --text-primary:   #e6edf3;
+  --text-secondary: #8b949e;
+  --text-dim:       #6e7681;
+
+  /* Status Colors */
+  --blue:           #58a6ff;
+  --blue-glow:      transparent;
+  --green:          #3fb950;
+  --green-glow:     transparent;
+  --amber:          #d29922;
+  --amber-glow:     transparent;
+  --red:            #f85149;
+  --red-glow:       transparent;
+  --purple:         #bc8cff;
+  --teal:           #39c5cf;
+
+  /* Spacing */
+  --gap:            4px;
+  --panel-pad:      16px;
+}
+
+/* ── Global Reset ───────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Inter', 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--bg-void);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar Styling ──────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-dim);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-glow);
+}
+
+/* ── Scanline CRT Overlay — DISABLED for performance ──────────────────── */
+#scanline-overlay {
+  display: none;
+}
+
+/* ── Holographic Scan Line — DISABLED for performance ─────────────────── */
+#holo-scan {
+  display: none;
+}
+
+#holo-scan::after {
+  display: none;
+}
+
+/* ── Particle Background Canvas — DISABLED for performance ───────────── */
+#particle-canvas {
+  display: none;
+}
+
+/* ── Main Grid Layout ───────────────────────────────────────────────────── */
+#app {
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  grid-template-rows: 48px 36px 1fr;
+  grid-template-columns: 1fr;
+  gap: 0;
+  background: var(--bg-void);
+  position: relative;
+  z-index: 1;
+}
+
+#topbar {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+#speed-bar {
+  grid-row: 2;
+  grid-column: 1;
+}
+
+#main-content {
+  grid-row: 3;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Split.js Row Containers ───────────────────────────────────────────── */
+#upper-row {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lower-row {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lower-row-mini {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Split.js requires child elements to have overflow hidden and min-size 0 */
+#upper-row > .panel,
+#lower-row > .panel,
+#lower-row-mini > .panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Split.js gutter within rows */
+#upper-row > .gutter,
+#lower-row > .gutter,
+#lower-row-mini > .gutter {
+  flex-shrink: 0;
+}
+
+
+/* ── Split.js Layout ────────────────────────────────────────────────────── */
+.split-horizontal {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: 0;
+}
+
+.split-vertical {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+/* Split.js Gutter (Drag Handle) Styles */
+.gutter {
+  background: var(--bg-void);
+  position: relative;
+  flex-shrink: 0;
+  z-index: 50;
+  transition: background 0.3s ease;
+}
+
+.gutter:hover {
+  background: var(--border-glow);
+}
+
+.gutter:active {
+  background: var(--blue);
+}
+
+.gutter.gutter-horizontal {
+  cursor: col-resize;
+  width: 4px;
+}
+
+.gutter.gutter-vertical {
+  cursor: row-resize;
+  height: 4px;
+}
+
+/* Gutter glow line on hover */
+.gutter::after {
+  content: '';
+  position: absolute;
+  transition: all 0.3s ease;
+  opacity: 0;
+}
+
+.gutter:hover::after {
+  opacity: 1;
+}
+
+.gutter.gutter-horizontal::after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--blue);
+  box-shadow: none;
+}
+
+.gutter.gutter-vertical::after {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: var(--blue);
+  box-shadow: none;
+}
+
+/* Grip dots on gutter */
+.gutter.gutter-horizontal::before {
+  content: '⋮';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-dim);
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.gutter.gutter-vertical::before {
+  content: '⋯';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-dim);
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.gutter:hover::before {
+  opacity: 1;
+}
+
+/* ── Panel Base ─────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-dim);
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  transition: border-color 0.5s ease;
+}
+
+/* Grid texture - subtle only */
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+}
+
+/* Subtle active border flash on data update - DISABLED to prevent flickering */
+.panel::after {
+  display: none;
+}
+
+.panel.data-flash::after {
+  display: none;
+}
+
+.panel-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+.label {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.value-lg {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.panel-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 8px var(--panel-pad);
+  border-bottom: 1px solid var(--border-dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-title i {
+  width: 12px;
+  height: 12px;
+  color: var(--blue);
+}
+
+/* ── Text Color Utilities ───────────────────────────────────────────────── */
+.text-blue   { color: var(--blue); }
+.text-green  { color: var(--green); }
+.text-amber  { color: var(--amber); }
+.text-red    { color: var(--red); }
+.text-purple { color: var(--purple); }
+.text-teal   { color: var(--teal); }
+.text-muted  { color: var(--text-secondary); }
+.text-dim    { color: var(--text-dim); }
+
+/* ── Selection ──────────────────────────────────────────────────────────── */
+::selection {
+  background: var(--blue);
+  color: #fff;
+}

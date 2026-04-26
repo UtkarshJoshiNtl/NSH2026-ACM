@@ -1,75 +1,92 @@
-/**
- * api.js — Network layer for simulation and telemetry
- */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ORBITAL INSIGHT — API Layer (Live Backend Only)
+   All data comes from the FastAPI backend at localhost:8000.
+   No demo mode, no synthetic fallback data.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-import { API_BASE } from './constants.js';
+const API = (() => {
+  const BASE = '';
 
-/**
- * Get API key from localStorage
- */
-function getApiKey() {
-    return localStorage.getItem('astrosis_api_key');
-}
-
-/**
- * Set API key in localStorage
- */
-function setApiKey(key) {
-    localStorage.setItem('astrosis_api_key', key);
-}
-
-/**
- * apiFetch — Common fetch wrapper with error handling
- */
-async function apiFetch(endpoint, options = {}) {
-    const url = `${API_BASE}${endpoint}`;
-    const apiKey = getApiKey();
-    
-    const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-    };
-    
-    if (apiKey) {
-        headers['X-API-Key'] = apiKey;
-    }
-    
+  // ── Fetch helper with timeout ─────────────────────────────────────────────
+  async function _fetch(path, opts = {}, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const response = await fetch(url, {
-            ...options,
-            headers,
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errorBody || response.statusText}`);
-        }
-
-        return await response.json();
+      const res = await fetch(BASE + path, { signal: controller.signal, ...opts });
+      clearTimeout(tid);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
     } catch (e) {
-        console.error(`API Fetch Error [${url}]:`, e);
-        throw e;
+      clearTimeout(tid);
+      throw e;
     }
-}
+  }
 
-export async function fetchSnapshot() {
+  // ── Public API ────────────────────────────────────────────────────────────
+
+  async function fetchSnapshot() {
+    return await _fetch('/api/visualization/snapshot');
+  }
+
+  async function fetchAlerts(afterId = 0) {
     try {
-        return await apiFetch('/visualization/snapshot');
-    } catch (e) {
-        return null;
-    }
-}
+      return await _fetch(`/api/alerts?after=${afterId}`);
+    } catch (_) { return { alerts: [], latest_id: afterId }; }
+  }
 
-export async function stepSim(hours) {
+  async function fetchConstellationStats() {
     try {
-        await apiFetch('/simulate/step', {
-            method: 'POST',
-            body: JSON.stringify({ step_seconds: hours * 3600 })
-        });
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
+      return await _fetch('/api/constellation/stats');
+    } catch (_) { return null; }
+  }
 
-export { setApiKey, getApiKey };
+  async function simulateStep(stepSeconds = 10) {
+    try {
+      return await _fetch('/api/simulate/step', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step_seconds: stepSeconds }),
+      });
+    } catch (_) { return null; }
+  }
+
+  async function startAutoSim(stepSeconds = 10, intervalMs = 1000) {
+    try {
+      return await _fetch('/api/simulate/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step_seconds: stepSeconds, real_interval_ms: intervalMs }),
+      });
+    } catch (_) {}
+  }
+
+  async function stopAutoSim() {
+    try {
+      return await _fetch('/api/simulate/stop', { method: 'POST' });
+    } catch (_) {}
+  }
+
+  async function getSimStatus() {
+    try { return await _fetch('/api/simulate/status'); }
+    catch (_) { return { running: false }; }
+  }
+
+  async function fetchHealth() {
+    try { return await _fetch('/health'); }
+    catch (_) { return { status: 'OFFLINE' }; }
+  }
+
+  // Legacy stubs kept so callers don't throw if referenced
+  function isDemo()    { return false; }
+  function setDemo()   {}
+  function getDemoTime() { return new Date(); }
+  function getDemoCDMs() { return []; }
+  function getDemoManeuvers() { return []; }
+
+  return {
+    fetchSnapshot, fetchAlerts, fetchConstellationStats,
+    simulateStep, startAutoSim, stopAutoSim, getSimStatus,
+    fetchHealth,
+    isDemo, setDemo, getDemoTime, getDemoCDMs, getDemoManeuvers,
+  };
+})();

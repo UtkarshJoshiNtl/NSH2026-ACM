@@ -1,39 +1,38 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  Astrosis — Dockerfile
+#  Autonomous Constellation Manager | National Space Hackathon 2026
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Use the required base image per Section 8 of the spec
 FROM ubuntu:22.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-# System dependencies as per Astrosis Spec
-RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-pip \
-    g++ \
-    cmake \
-    make \
-    python3-dev \
-    pybind11-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install Python deps
-COPY requirements.txt .
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install Python 3.11 and dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-dev python3-pip \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt ./requirements.txt
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Compile C++ physics engine (backend/cpp/ in our repo)
-COPY backend/cpp/ ./backend/cpp/
-RUN mkdir -p ./backend/cpp/build && \
-    cd ./backend/cpp/build && \
-    cmake .. && \
-    make -j4
+# Copy application layers
+COPY backend/ ./backend/
+COPY data/ ./data/
+COPY frontend/ ./frontend/
 
-# Copy the compiled .so to root for Python to find easily
-RUN cp backend/cpp/build/physics_engine*.so /app/
+# Ensure host-OS engine binaries aren't mixed in
+RUN rm -f ./backend/core/autocm_engine*.so ./backend/core/autocm_engine*.pyd 2>/dev/null || true
 
-# Copy all project files
-COPY . .
+# Generate catalog if not present
+RUN cd /app/data && python3 generate_catalog.py 2>/dev/null || echo "[OK] Using existing catalog"
 
-# Expose port 8000
 EXPOSE 8000
 
-# Start command as per Spec
-CMD ["python3", "backend/main.py"]
+# High-performance Uvicorn worker
+CMD ["python3", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

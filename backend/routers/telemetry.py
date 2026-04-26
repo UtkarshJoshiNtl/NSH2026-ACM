@@ -1,62 +1,83 @@
+"""
+═══════════════════════════════════════════════════════════════════════════
+ ACM API — Telemetry Router
+ Telemetry ingestion and constellation status endpoints.
+ National Space Hackathon 2026
+═══════════════════════════════════════════════════════════════════════════
+"""
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Optional
-from backend.core.state_manager import state_mgr, ObjectState
-from backend.core.conjunction import check_conjunctions_async
-import asyncio
+from pydantic import BaseModel, Field
+from typing import Optional, List
 
-router = APIRouter()
+from ..state_manager import state
 
-
-class TelemetryObject(BaseModel):
-    id: str
-    type: str  # "SATELLITE" | "DEBRIS"
-    r: Dict[str, float]  # {"x": km, "y": km, "z": km}
-    v: Dict[str, float]  # {"x": km/s, "y": km/s, "z": km/s}
-    # also accepts "vx"/"vy"/"vz" keys
-    m_fuel: float = 50.0
+router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
 
 
-class TelemetryRequest(BaseModel):
-    timestamp: str
-    objects: List[TelemetryObject]
+class TelemetryPayload(BaseModel):
+    satellite_id: str
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lon: Optional[float] = Field(None, ge=-180, le=180)
+    alt_km: Optional[float] = Field(None, ge=0, le=2000)
+    fuel_kg: Optional[float] = Field(None, ge=0)
+    status: Optional[str] = Field(None, pattern="^(NOMINAL|EVADING|RECOVERING|EOL)$")
 
 
-def _vec(d: Dict[str, float], keys_primary, keys_fallback) -> list:
-    """Extract [a, b, c] from a dict that may use either key scheme."""
-    try:
-        return [d[keys_primary[0]], d[keys_primary[1]], d[keys_primary[2]]]
-    except KeyError:
-        return [d[keys_fallback[0]], d[keys_fallback[1]], d[keys_fallback[2]]]
+class BulkTelemetryPayload(BaseModel):
+    entries: List[TelemetryPayload]
 
 
-@router.post("/telemetry")
-async def ingest_telemetry(req: TelemetryRequest):
-    count = 0
-    for obj in req.objects:
-        try:
-            r = _vec(obj.r, ["x", "y", "z"], ["rx", "ry", "rz"])
-            v = _vec(obj.v, ["x", "y", "z"], ["vx", "vy", "vz"])
-        except KeyError as e:
-            raise HTTPException(
-                status_code=422, detail=f"Object {obj.id}: missing vector key {e}"
-            )
+@router.post("/ingest")
+async def ingest_telemetry(payload: TelemetryPayload):
+    """Ingest telemetry data for a single satellite."""
+    sat = state.fleet.satellites.get(payload.satellite_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail=f"Satellite {payload.satellite_id} not found")
+    
+    # Update fields
+    if payload.fuel_kg is not None: sat.fuel_kg = payload.fuel_kg
+    if payload.status is not None: sat.status = payload.status
+    if payload.lat is not None: sat.lat = payload.lat
+    if payload.lon is not None: sat.lon = payload.lon
+    if payload.alt_km is not None: sat.alt_km = payload.alt_km
 
-        state = ObjectState(
-            id=obj.id,
-            obj_type=obj.type,
-            r=r,
-            v=v,
-            m_fuel=obj.m_fuel,
-        )
-        state_mgr.upsert(state)
-        count += 1
+    return {"status": "OK", "satellite_id": payload.satellite_id}
 
-    # Trigger async conjunction check (non-blocking)
-    asyncio.create_task(check_conjunctions_async())
 
+@router.post("/ingest/bulk")
+async def ingest_bulk(payload: BulkTelemetryPayload):
+    """Ingest telemetry for multiple satellites."""
+    results, errors = [], []
+    for entry in payload.entries:
+        telemetry = {k: getattr(entry, k) for k in ["lat","lon","alt_km","fuel_kg","status"] if getattr(entry, k) is not None}
+        if state.ingest_telemetry(entry.satellite_id, telemetry):
+            results.append(entry.satellite_id)
+        else:
+            errors.append(entry.satellite_id)
+    return {"status": "OK", "ingested": len(results), "failed": len(errors), "errors": errors}
+
+
+@router.get("/satellite/{satellite_id}")
+async def get_satellite(satellite_id: str):
+    """Get current telemetry for a satellite."""
+    sat = state.fleet.satellites.get(satellite_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail=f"Satellite {satellite_id} not found")
+    return {"satellite": sat.model_dump(), "eci_position": sat.r.model_dump(), "eci_velocity": sat.v.model_dump()}
+
+
+@router.get("/constellation")
+async def get_constellation():
+    """Get constellation-wide statistics."""
+    return state.get_stats()
+
+
+@router.get("/cdms")
+async def get_cdms():
+    """Get active Conjunction Data Messages."""
     return {
-        "status": "ACK",
-        "processed_count": count,
-        "active_cdm_warnings": len(state_mgr.active_cdms),
+        "cdms": [c.model_dump() for c in state.conj.active_cdms],
+        "count": len(state.conj.active_cdms),
+        "critical": len([c for c in state.conj.active_cdms if c.missDistance < 0.1]),
     }

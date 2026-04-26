@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    ORBITAL INSIGHT — Fuel Status Panel
-   Migrated from AutoCM for hackathon-compliant fuel visualization
+   Section 6.2 — Telemetry & Resource Heatmaps
    • SVG circular arc gauge per satellite (colour-coded: green/amber/red)
    • Sorted lowest-fuel first
    • Pulsing critical indicator when fuel < 20%

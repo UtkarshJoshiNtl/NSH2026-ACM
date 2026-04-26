@@ -1,6 +1,5 @@
 /* =============================================================================
    MISSION ALERTS FEED — frontend/js/alerts.js
-   Migrated from AutoCM for hackathon-compliant alert system
    Live mission event log with severity badges and toast notifications.
    ============================================================================= */
 

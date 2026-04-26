@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    ORBITAL INSIGHT — Maneuver Timeline Gantt (D3.js)
-   Migrated from AutoCM for hackathon-compliant maneuver visualization
+   Section 6.2 — Maneuver Timeline (Gantt Scheduler)
    • Burn Start / Burn End blocks with distinct colours
    • 600s cooldown blocks with diagonal-stripe pattern
    • Conflict detection: overlapping burns on same satellite → red hatched flag
