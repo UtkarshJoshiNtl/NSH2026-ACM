@@ -13,7 +13,7 @@ double FuelTracker::fuel_percentage() const {
 }
 
 bool FuelTracker::is_critical() const {
-    return fuel_percentage() < 5.0;
+    return fuel_percentage() < 10.0;
 }
 
 bool FuelTracker::is_empty() const {

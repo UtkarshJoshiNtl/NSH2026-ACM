@@ -8,6 +8,72 @@
 
 namespace py = pybind11;
 
+// ---------------------------------------------------------------------------
+// US Standard Atmosphere 1976 — piecewise exponential density table (kg/m³)
+// Each entry: {alt_base_km, scale_height_km, rho_base}
+// Source: Vallado "Fundamentals of Astrodynamics", Table 8-4
+// ---------------------------------------------------------------------------
+struct AtmoEntry {
+    double alt_base_km;
+    double scale_height_km;
+    double rho_base;
+};
+
+const AtmoEntry ATMO_TABLE[] = {
+    {0,    8.44,  1.225e+0},
+    {25,   6.49,  3.899e-2},
+    {30,   6.75,  1.774e-2},
+    {40,   7.58,  3.972e-3},
+    {50,   8.55,  1.057e-3},
+    {60,   7.71,  3.206e-4},
+    {70,   6.55,  8.770e-5},
+    {80,   5.79,  1.905e-5},
+    {90,   5.57,  3.396e-6},
+    {100,  5.90,  5.297e-7},
+    {110,  7.17,  9.661e-8},
+    {120,  9.59,  2.438e-8},
+    {130, 12.20,  8.484e-9},
+    {140, 15.50,  3.845e-9},
+    {150, 19.30,  2.070e-9},
+    {180, 26.00,  5.464e-10},
+    {200, 26.00,  2.789e-10},
+    {250, 38.50,  7.248e-11},
+    {300, 51.00,  2.418e-11},
+    {350, 59.50,  9.518e-12},
+    {400, 67.60,  3.725e-12},
+    {450, 76.00,  1.585e-12},
+    {500, 84.00,  6.967e-13},
+    {600, 105.0,  1.454e-13},
+    {700, 130.0,  3.614e-14},
+    {800, 180.0,  1.170e-14},
+    {900, 268.0,  5.245e-15},
+    {1000, 1e9,   3.019e-15}  // exosphere sentinel
+};
+
+const int ATMO_TABLE_SIZE = sizeof(ATMO_TABLE) / sizeof(AtmoEntry);
+
+double atmospheric_density(double altitude_km) {
+    if (altitude_km >= 1000.0) return 0.0;
+    if (altitude_km < 0.0) altitude_km = 0.0;
+    
+    for (int i = 0; i < ATMO_TABLE_SIZE - 1; i++) {
+        double h0 = ATMO_TABLE[i].alt_base_km;
+        double H = ATMO_TABLE[i].scale_height_km;
+        double rho0 = ATMO_TABLE[i].rho_base;
+        double h1 = ATMO_TABLE[i + 1].alt_base_km;
+        
+        if (h0 <= altitude_km && altitude_km < h1) {
+            return rho0 * std::exp(-(altitude_km - h0) / H);
+        }
+    }
+    
+    // Fallback to first entry
+    double h0 = ATMO_TABLE[0].alt_base_km;
+    double H = ATMO_TABLE[0].scale_height_km;
+    double rho0 = ATMO_TABLE[0].rho_base;
+    return rho0 * std::exp(-(altitude_km - h0) / H);
+}
+
 // ─── Gravity + J2 acceleration ──────────────────────────────────
 std::array<double, 3> Propagator::acceleration(
     const std::array<double, 3>& r) const {
@@ -53,11 +119,8 @@ std::array<double, 3> Propagator::acceleration_with_drag(
         return a_grav_j2; // Exosphere, drag negligible
     }
 
-    // Very basic exponential atmosphere density model (kg/m^3)
-    double rho0 = 4e-13;
-    double h0 = 500.0;
-    double H = 50.0;
-    double rho = rho0 * std::exp(-(h_km - h0) / H);
+    // Use US Standard Atmosphere 1976 table lookup
+    double rho = atmospheric_density(h_km);
 
     // v_rel = v - omega_earth x r (in km/s)
     double v_rel_x = v[0] + OMEGA_EARTH * y;

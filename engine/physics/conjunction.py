@@ -68,6 +68,7 @@ class ConjunctionDetector:
                 # Simple temporal search
                 # In production, we'd use Brent's method for TCA refinement
                 for t in np.arange(0, lookahead_s, step_s):
+                    # Compute distance from current propagated states
                     r_sat = np.array(s_state[:3])
                     r_deb = np.array(d_state[:3])
                     
@@ -78,7 +79,7 @@ class ConjunctionDetector:
                         tca_time = t
                         rel_v_at_tca = list(np.array(s_state[3:]) - np.array(d_state[3:]))
                         
-                    # Advance
+                    # Advance states for next iteration
                     if t + step_s < lookahead_s:
                         s_state = rk4_py(s_state, step_s)
                         d_state = rk4_py(d_state, step_s)

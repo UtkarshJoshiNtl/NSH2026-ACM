@@ -39,7 +39,20 @@ class ManeuverCalculator:
         
         rv_mag = np.linalg.norm(rv)
         if rv_mag < 1e-9:
-            return ManeuverPlan([0,0,0], [0,0,0], 0.0, 0.0)
+            # Fallback: when relative velocity is zero, burn radially outward
+            r_hat = r / np.linalg.norm(r)
+            evasion_dv_eci = r_hat * MAX_DV
+            recovery_dv_eci = -evasion_dv_eci
+            tracker = FuelTracker()
+            cost_evasion = tracker.calculate_fuel_cost(list(evasion_dv_eci))
+            tracker.apply_burn(list(evasion_dv_eci))
+            cost_recovery = tracker.calculate_fuel_cost(list(recovery_dv_eci))
+            return ManeuverPlan(
+                evasion_dv_eci=list(evasion_dv_eci),
+                recovery_dv_eci=list(recovery_dv_eci),
+                fuel_cost_kg=cost_evasion + cost_recovery,
+                burn_timing_offset_s=COOLDOWN_S
+            )
 
         # Strategy: Burn in the "Normal" direction (h = r x v)
         # This changes the orbit inclination slightly, which is very effective for evasion
