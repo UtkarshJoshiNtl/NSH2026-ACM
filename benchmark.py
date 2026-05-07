@@ -1,573 +1,300 @@
 """
-Benchmark script to compare Python vs C++ performance in Astrosis.
-Tests propagator, conjunction detection, fuel calculation, and maneuver planning.
+benchmark.py — Three-Way Performance Benchmark: Python vs C++ vs CUDA
+======================================================================
+Compares every available backend across multiple workload sizes:
+  - Single-satellite propagation (scalability baseline)
+  - Batch propagation: N satellites × steps
+  - Conjunction detection: N sats × N debris
+  - Fuel calculation
+  - Maneuver planning
+
+Run with:
+    python benchmark.py           # auto-selects available backends
+    python benchmark.py --quick   # smaller workloads for fast iteration
 """
 
+import argparse
 import time
 import sys
 import os
 import logging
 import tracemalloc
+from dataclasses import dataclass, field
+from typing import Optional, List, Tuple
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.WARNING)
 
-# Add paths
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'cpp', 'build'))
 sys.path.insert(0, os.path.dirname(__file__))
 
-from engine.physics.propagator import rk4_py, rk4_py_drag
-from engine.physics.conjunction import ConjunctionDetector as PyConjunctionDetector
+# ── Import backends directly so we can force each one ────────────────────────
+from engine.physics.propagator import rk4_py, rk4_py_drag, propagate_batch_numpy
+from engine.physics.conjunction import ConjunctionDetector as PyDetector
 from engine.physics.fuel import FuelTracker as PyFuelTracker
-from engine.physics.maneuver import ManeuverCalculator as PyManeuverCalculator
-from engine.physics.accelerator import _physics
+from engine.physics.maneuver import ManeuverCalculator as PyManeuverCalc, ManeuverPlan
+from engine.physics.conjunction import ConjunctionWarning
 from engine.constants import MU, RE, INITIAL_FUEL, DRY_MASS
+import numpy as np
 
-# Test data - ISS-like orbit
-ISS_STATE = [
-    -6371.0 + 400.0,  # x (km) - altitude 400km
-    0.0,              # y
-    0.0,              # z
-    0.0,              # vx
-    7.66,             # vy (km/s) - circular orbit velocity
-    0.0               # vz
-]
+# Try loading C++ / CUDA module
+try:
+    import physics_engine as _cpp
+    _HAS_CPP = True
+    _HAS_CUDA = getattr(_cpp, 'cuda_available', lambda: False)()
+    _HAS_BATCH = hasattr(_cpp.Propagator, 'batch_propagate_steps')
+except ImportError:
+    _cpp = None
+    _HAS_CPP = False
+    _HAS_CUDA = False
+    _HAS_BATCH = False
 
-# Generate multiple satellite states for conjunction test
-def generate_test_states(count=10):
-    """Generate test satellite and debris states."""
-    sat_states = []
-    debris_states = []
-    
-    for i in range(count):
-        # Satellite states - slight variations
-        sat_states.append([
-            -6371.0 + 400.0 + i * 0.1,
-            i * 0.5,
-            0.0,
-            0.0,
-            7.66 + i * 0.001,
-            0.0
-        ])
-        
-        # Debris states - potentially close approaches
-        debris_states.append([
-            -6371.0 + 405.0 + i * 0.1,
-            i * 0.5 + 1.0,
-            0.5,
-            0.1,
-            7.65 + i * 0.001,
-            0.1
-        ])
-    
-    return sat_states, debris_states
+# ── Test data ─────────────────────────────────────────────────────────────────
+ISS_STATE = [-6371.0 + 400.0, 0.0, 0.0, 0.0, 7.66, 0.0]
 
-def benchmark_propagation(iterations=100000):
-    """Benchmark RK4 propagation."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: RK4 Propagation")
-    logger.info(f"{'='*60}")
-    logger.info(f"Iterations: {iterations}")
-    
-    # Python benchmark
-    start = time.time()
-    state = tuple(ISS_STATE)
-    for _ in range(iterations):
-        state = rk4_py(state, 10.0)  # 10 second steps
-    py_time = time.time() - start
-    logger.info(f"Python: {py_time:.4f}s")
-    
-    # C++ benchmark
-    if _physics:
-        start = time.time()
-        state = ISS_STATE.copy()
-        propagator = _physics.Propagator()
-        for _ in range(iterations):
-            state = list(propagator.propagate(state, 10.0))
-        cpp_time = time.time() - start
-        logger.info(f"C++:    {cpp_time:.4f}s")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+def gen_states(n: int) -> Tuple[list, list]:
+    sats, debs = [], []
+    for i in range(n):
+        sats.append([-6371+400+i*0.1, i*0.5, 0.0, 0.0, 7.66+i*0.001, 0.0])
+        debs.append([-6371+405+i*0.1, i*0.5+1.0, 0.5, 0.1, 7.65+i*0.001, 0.1])
+    return sats, debs
 
-def benchmark_propagation_with_drag(iterations=100000):
-    """Benchmark RK4 propagation with atmospheric drag."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: RK4 Propagation with Drag")
-    logger.info(f"{'='*60}")
-    logger.info(f"Iterations: {iterations}")
-    
-    # Python benchmark
-    start = time.time()
-    state = tuple(ISS_STATE)
-    for _ in range(iterations):
-        state = rk4_py_drag(state, 10.0, area=10.0, mass=1000.0, cd=2.2)
-    py_time = time.time() - start
-    logger.info(f"Python: {py_time:.4f}s")
-    
-    # C++ benchmark
-    if _physics:
-        start = time.time()
-        state = ISS_STATE.copy()
-        propagator = _physics.Propagator()
-        for _ in range(iterations):
-            state = list(propagator.propagate_with_drag(state, 10.0, 10.0, 1000.0, 2.2))
-        cpp_time = time.time() - start
-        logger.info(f"C++:    {cpp_time:.4f}s")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
 
-def benchmark_conjunction_detection(sat_count=100, debris_count=100):
-    """Benchmark conjunction detection."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Conjunction Detection")
-    logger.info(f"{'='*60}")
-    logger.info(f"Satellites: {sat_count}, Debris: {debris_count}")
-    
-    sat_states, debris_states = generate_test_states(max(sat_count, debris_count))
-    sat_states = sat_states[:sat_count]
-    debris_states = debris_states[:debris_count]
-    
-    # Python benchmark
-    start = time.time()
-    detector = PyConjunctionDetector()
-    warnings_py = detector.detect(sat_states, debris_states, lookahead_s=3600.0, step_s=60.0)
-    py_time = time.time() - start
-    logger.info(f"Python: {py_time:.4f}s ({len(warnings_py)} warnings)")
-    
-    # C++ benchmark
-    if _physics:
-        start = time.time()
-        detector = _physics.ConjunctionDetector()
-        warnings_cpp = detector.detect(sat_states, debris_states, 3600.0)
-        cpp_time = time.time() - start
-        logger.info(f"C++:    {cpp_time:.4f}s ({len(warnings_cpp)} warnings)")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+# ── Timing helper ─────────────────────────────────────────────────────────────
+@dataclass
+class BenchResult:
+    name: str
+    py_s:   Optional[float] = None
+    np_s:   Optional[float] = None
+    cpp_s:  Optional[float] = None
+    cuda_s: Optional[float] = None
+    note:   str = ""
 
-def benchmark_conjunction_detection_extreme(sat_count=500, debris_count=500):
-    """Benchmark conjunction detection with extreme workload."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Conjunction Detection (EXTREME)")
-    logger.info(f"{'='*60}")
-    logger.info(f"Satellites: {sat_count}, Debris: {debris_count}")
-    
-    sat_states, debris_states = generate_test_states(max(sat_count, debris_count))
-    sat_states = sat_states[:sat_count]
-    debris_states = debris_states[:debris_count]
-    
-    # Python benchmark
-    start = time.time()
-    detector = PyConjunctionDetector()
-    warnings_py = detector.detect(sat_states, debris_states, lookahead_s=3600.0, step_s=60.0)
-    py_time = time.time() - start
-    logger.info(f"Python: {py_time:.4f}s ({len(warnings_py)} warnings)")
-    
-    # C++ benchmark
-    if _physics:
-        start = time.time()
-        detector = _physics.ConjunctionDetector()
-        warnings_cpp = detector.detect(sat_states, debris_states, 3600.0)
-        cpp_time = time.time() - start
-        logger.info(f"C++:    {cpp_time:.4f}s ({len(warnings_cpp)} warnings)")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+    def speedup(self, ref, val) -> str:
+        if ref is None or val is None or val == 0:
+            return "N/A"
+        return f"{ref/val:.1f}×"
 
-def benchmark_conjunction_detection_ultra(sat_count=1000, debris_count=1000):
-    """Benchmark conjunction detection with ultra-extreme workload."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Conjunction Detection (ULTRA-EXTREME)")
-    logger.info(f"{'='*60}")
-    logger.info(f"Satellites: {sat_count}, Debris: {debris_count}")
-    
-    sat_states, debris_states = generate_test_states(max(sat_count, debris_count))
-    sat_states = sat_states[:sat_count]
-    debris_states = debris_states[:debris_count]
-    
-    # Python benchmark with memory tracking
-    tracemalloc.start()
-    start = time.time()
-    detector = PyConjunctionDetector()
-    warnings_py = detector.detect(sat_states, debris_states, lookahead_s=3600.0, step_s=60.0)
-    py_time = time.time() - start
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    logger.info(f"Python: {py_time:.4f}s ({len(warnings_py)} warnings)")
-    logger.info(f"Python Memory: Peak {peak / 1024 / 1024:.2f} MB")
-    
-    # C++ benchmark with memory tracking
-    if _physics:
-        tracemalloc.start()
-        start = time.time()
-        detector = _physics.ConjunctionDetector()
-        warnings_cpp = detector.detect(sat_states, debris_states, 3600.0)
-        cpp_time = time.time() - start
-        current, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-        logger.info(f"C++:    {cpp_time:.4f}s ({len(warnings_cpp)} warnings)")
-        logger.info(f"C++ Memory: Peak {peak / 1024 / 1024:.2f} MB")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+    def row(self) -> str:
+        sp_cpp  = self.speedup(self.py_s, self.cpp_s)
+        sp_np   = self.speedup(self.py_s, self.np_s)
+        sp_cuda = self.speedup(self.py_s, self.cuda_s)
 
-def benchmark_fuel_calculation(iterations=100000):
-    """Benchmark fuel calculation."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Fuel Calculation")
-    logger.info(f"{'='*60}")
-    logger.info(f"Iterations: {iterations}")
-    
-    delta_v = [0.1, 0.2, 0.3]  # km/s
-    
-    # Python benchmark
-    start = time.time()
-    tracker = PyFuelTracker(INITIAL_FUEL)
-    for _ in range(iterations):
-        fuel = tracker.calculate_fuel_cost(delta_v)
-    py_time = time.time() - start
-    logger.info(f"Python: {py_time:.4f}s (fuel: {fuel:.4f} kg)")
-    
-    # C++ benchmark
-    if _physics:
-        start = time.time()
-        tracker = _physics.FuelTracker(INITIAL_FUEL, DRY_MASS)
-        for _ in range(iterations):
-            fuel = tracker.calculate_fuel_cost(delta_v)
-        cpp_time = time.time() - start
-        logger.info(f"C++:    {cpp_time:.4f}s (fuel: {fuel:.4f} kg)")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+        def fmt(v): return f"{v*1000:8.1f} ms" if v is not None else "       N/A"
 
-def benchmark_maneuver_calculation(iterations=10000):
-    """Benchmark maneuver calculation."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Maneuver Calculation")
-    logger.info(f"{'='*60}")
-    logger.info(f"Iterations: {iterations}")
-    
-    # Create a mock warning
-    from engine.physics.conjunction import ConjunctionWarning
-    warning = ConjunctionWarning(
-        sat_id=0,
-        debris_id=1,
-        current_distance=5.0,
-        time_to_closest_approach=3600.0,
-        severity="WARNING",
-        relative_velocity=[0.1, 0.2, 0.3]
-    )
-    
-    # Python benchmark
-    start = time.time()
-    calculator = PyManeuverCalculator()
-    for _ in range(iterations):
-        result = calculator.calculate(ISS_STATE, warning)
-    py_time = time.time() - start
-    logger.info(f"Python: {py_time:.4f}s")
-    
-    # C++ benchmark - skip due to type incompatibility with ConjunctionWarning
-    if _physics:
-        logger.warning("C++ maneuver benchmark skipped - type incompatibility with ConjunctionWarning")
-        cpp_time = None
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+        return (f"  {self.name:<38} │ {fmt(self.py_s)} │ {fmt(self.np_s)} │"
+                f" {fmt(self.cpp_s)} (×{sp_cpp:>6}) │"
+                f" {fmt(self.cuda_s)} (×{sp_cuda:>6})")
 
-def benchmark_batch_propagation(num_objects=1000, steps=1000):
-    """Benchmark batch propagation - propagate multiple objects for multiple steps."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Batch Propagation")
-    logger.info(f"{'='*60}")
-    logger.info(f"Objects: {num_objects}, Steps: {steps}")
-    
-    # Generate multiple initial states
-    states = []
-    for i in range(num_objects):
-        states.append([
-            -6371.0 + 400.0 + i * 0.01,
-            i * 0.1,
-            0.0,
-            0.0,
-            7.66 + i * 0.0001,
-            0.0
-        ])
-    
-    # Python benchmark
-    start = time.time()
-    for _ in range(steps):
-        for i in range(num_objects):
-            states[i] = list(rk4_py(tuple(states[i]), 10.0))
-    py_time = time.time() - start
-    logger.info(f"Python: {py_time:.4f}s")
-    
-    # C++ benchmark
-    if _physics:
-        # Reset states
-        states = []
-        for i in range(num_objects):
-            states.append([
-                -6371.0 + 400.0 + i * 0.01,
-                i * 0.1,
-                0.0,
-                0.0,
-                7.66 + i * 0.0001,
-                0.0
-            ])
-        
-        start = time.time()
-        propagator = _physics.Propagator()
+
+def _t(fn) -> float:
+    """Time a callable, return seconds."""
+    start = time.perf_counter()
+    fn()
+    return time.perf_counter() - start
+
+
+# ── Benchmarks ────────────────────────────────────────────────────────────────
+
+def bench_single_propagation(iters: int) -> BenchResult:
+    r = BenchResult(f"Single propagation ({iters:,} iters)")
+
+    # Python
+    def py():
+        s = tuple(ISS_STATE)
+        for _ in range(iters): s = rk4_py(s, 10.0)
+    r.py_s = _t(py)
+
+    # NumPy (batch of 1)
+    arr = np.array([ISS_STATE])
+    def np_fn():
+        a = arr.copy()
+        for _ in range(iters):
+            from engine.physics.propagator import rk4_batch
+            a = rk4_batch(a, 10.0)
+    r.np_s = _t(np_fn)
+
+    # C++
+    if _HAS_CPP:
+        prop = _cpp.Propagator()
+        def cpp():
+            s = list(ISS_STATE)
+            for _ in range(iters): s = list(prop.propagate(s, 10.0))
+        r.cpp_s = _t(cpp)
+
+    return r
+
+
+def bench_batch_propagation(n: int, steps: int) -> BenchResult:
+    r = BenchResult(f"Batch propagation ({n:,} sats × {steps:,} steps)")
+    sats, _ = gen_states(n)
+    dt = 10.0
+
+    # Python loop
+    def py():
+        ss = [tuple(s) for s in sats]
         for _ in range(steps):
-            for i in range(num_objects):
-                states[i] = list(propagator.propagate(states[i], 10.0))
-        cpp_time = time.time() - start
-        logger.info(f"C++:    {cpp_time:.4f}s")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+            ss = [rk4_py(s, dt) for s in ss]
+    r.py_s = _t(py)
 
-def benchmark_batch_propagation_ultra(num_objects=5000, steps=2000):
-    """Benchmark batch propagation with ultra-extreme workload."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Batch Propagation (ULTRA-EXTREME)")
-    logger.info(f"{'='*60}")
-    logger.info(f"Objects: {num_objects}, Steps: {steps}")
-    
-    # Generate multiple initial states
-    states = []
-    for i in range(num_objects):
-        states.append([
-            -6371.0 + 400.0 + i * 0.01,
-            i * 0.1,
-            0.0,
-            0.0,
-            7.66 + i * 0.0001,
-            0.0
-        ])
-    
-    # Python benchmark with memory tracking
-    tracemalloc.start()
-    start = time.time()
-    for _ in range(steps):
-        for i in range(num_objects):
-            states[i] = list(rk4_py(tuple(states[i]), 10.0))
-    py_time = time.time() - start
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    logger.info(f"Python: {py_time:.4f}s")
-    logger.info(f"Python Memory: Peak {peak / 1024 / 1024:.2f} MB")
-    
-    # C++ benchmark with memory tracking
-    if _physics:
-        # Reset states
-        states = []
-        for i in range(num_objects):
-            states.append([
-                -6371.0 + 400.0 + i * 0.01,
-                i * 0.1,
-                0.0,
-                0.0,
-                7.66 + i * 0.0001,
-                0.0
-            ])
-        
-        tracemalloc.start()
-        start = time.time()
-        propagator = _physics.Propagator()
-        for _ in range(steps):
-            for i in range(num_objects):
-                states[i] = list(propagator.propagate(states[i], 10.0))
-        cpp_time = time.time() - start
-        current, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-        logger.info(f"C++:    {cpp_time:.4f}s")
-        logger.info(f"C++ Memory: Peak {peak / 1024 / 1024:.2f} MB")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+    # NumPy vectorized
+    def np_fn():
+        propagate_batch_numpy(sats, dt, steps)
+    r.np_s = _t(np_fn)
 
-def benchmark_conjunction_detection_maximum(sat_count=2000, debris_count=2000):
-    """Benchmark conjunction detection with maximum stress test."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Conjunction Detection (MAXIMUM STRESS)")
-    logger.info(f"{'='*60}")
-    logger.info(f"Satellites: {sat_count}, Debris: {debris_count}")
-    
-    sat_states, debris_states = generate_test_states(max(sat_count, debris_count))
-    sat_states = sat_states[:sat_count]
-    debris_states = debris_states[:debris_count]
-    
-    # Python benchmark with memory tracking
-    tracemalloc.start()
-    start = time.time()
-    detector = PyConjunctionDetector()
-    warnings_py = detector.detect(sat_states, debris_states, lookahead_s=3600.0, step_s=60.0)
-    py_time = time.time() - start
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    logger.info(f"Python: {py_time:.4f}s ({len(warnings_py)} warnings)")
-    logger.info(f"Python Memory: Peak {peak / 1024 / 1024:.2f} MB")
-    
-    # C++ benchmark with memory tracking
-    if _physics:
-        tracemalloc.start()
-        start = time.time()
-        detector = _physics.ConjunctionDetector()
-        warnings_cpp = detector.detect(sat_states, debris_states, 3600.0)
-        cpp_time = time.time() - start
-        current, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-        logger.info(f"C++:    {cpp_time:.4f}s ({len(warnings_cpp)} warnings)")
-        logger.info(f"C++ Memory: Peak {peak / 1024 / 1024:.2f} MB")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+    # C++ batch (GIL-released)
+    if _HAS_BATCH:
+        prop = _cpp.Propagator()
+        def cpp():
+            prop.batch_propagate_steps(sats, dt, steps)
+        r.cpp_s = _t(cpp)
 
-def benchmark_batch_propagation_maximum(num_objects=10000, steps=5000):
-    """Benchmark batch propagation with maximum stress test."""
-    logger.info(f"\n{'='*60}")
-    logger.info("BENCHMARK: Batch Propagation (MAXIMUM STRESS)")
-    logger.info(f"{'='*60}")
-    logger.info(f"Objects: {num_objects}, Steps: {steps}")
-    
-    # Generate multiple initial states
-    states = []
-    for i in range(num_objects):
-        states.append([
-            -6371.0 + 400.0 + i * 0.01,
-            i * 0.1,
-            0.0,
-            0.0,
-            7.66 + i * 0.0001,
-            0.0
-        ])
-    
-    # Python benchmark with memory tracking
-    tracemalloc.start()
-    start = time.time()
-    for _ in range(steps):
-        for i in range(num_objects):
-            states[i] = list(rk4_py(tuple(states[i]), 10.0))
-    py_time = time.time() - start
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    logger.info(f"Python: {py_time:.4f}s")
-    logger.info(f"Python Memory: Peak {peak / 1024 / 1024:.2f} MB")
-    
-    # C++ benchmark with memory tracking
-    if _physics:
-        # Reset states
-        states = []
-        for i in range(num_objects):
-            states.append([
-                -6371.0 + 400.0 + i * 0.01,
-                i * 0.1,
-                0.0,
-                0.0,
-                7.66 + i * 0.0001,
-                0.0
-            ])
-        
-        tracemalloc.start()
-        start = time.time()
-        propagator = _physics.Propagator()
-        for _ in range(steps):
-            for i in range(num_objects):
-                states[i] = list(propagator.propagate(states[i], 10.0))
-        cpp_time = time.time() - start
-        current, peak = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
-        logger.info(f"C++:    {cpp_time:.4f}s")
-        logger.info(f"C++ Memory: Peak {peak / 1024 / 1024:.2f} MB")
-        speedup = py_time / cpp_time
-        logger.info(f"Speedup: {speedup:.2f}x")
-    else:
-        logger.warning("C++ module not available - skipping C++ benchmark")
-        cpp_time = None
-    
-    return py_time, cpp_time
+    # CUDA
+    if _HAS_CUDA:
+        arr = np.array(sats, dtype=np.float64).ravel()
+        def cuda():
+            a = arr.copy()
+            _cpp.cuda_propagate_batch(a, n, dt, steps)
+        r.cuda_s = _t(cuda)
 
-def main():
-    logger.info("Starting Astrosis Performance Benchmark")
-    logger.info(f"C++ Module Available: {_physics is not None}")
-    
-    results = {}
-    
-    # Run benchmarks
-    results['propagation'] = benchmark_propagation(100000)
-    results['propagation_drag'] = benchmark_propagation_with_drag(100000)
-    results['conjunction'] = benchmark_conjunction_detection(100, 100)
-    results['conjunction_extreme'] = benchmark_conjunction_detection_extreme(500, 500)
-    results['conjunction_ultra'] = benchmark_conjunction_detection_ultra(1000, 1000)
-    results['conjunction_maximum'] = benchmark_conjunction_detection_maximum(2000, 2000)
-    results['batch_propagation'] = benchmark_batch_propagation(1000, 1000)
-    results['batch_propagation_ultra'] = benchmark_batch_propagation_ultra(5000, 2000)
-    results['batch_propagation_maximum'] = benchmark_batch_propagation_maximum(10000, 5000)
-    results['fuel'] = benchmark_fuel_calculation(100000)
-    results['maneuver'] = benchmark_maneuver_calculation(10000)
-    
-    # Summary
-    logger.info(f"\n{'='*60}")
-    logger.info("SUMMARY")
-    logger.info(f"{'='*60}")
-    
-    for name, (py_time, cpp_time) in results.items():
-        if cpp_time:
-            speedup = py_time / cpp_time
-            logger.info(f"{name:20s}: Python {py_time:.4f}s, C++ {cpp_time:.4f}s, Speedup {speedup:.2f}x")
-        else:
-            logger.info(f"{name:20s}: Python {py_time:.4f}s (C++ N/A)")
-    
-    # Overall speedup if all C++ benchmarks ran
-    if all(cpp is not None for _, cpp in results.values()):
-        total_py = sum(py for py, _ in results.values())
-        total_cpp = sum(cpp for _, cpp in results.values())
-        overall_speedup = total_py / total_cpp
-        logger.info(f"\nOverall Speedup: {overall_speedup:.2f}x")
+    return r
+
+
+def bench_conjunction(n: int, lookahead: float = 3600.0, step: float = 60.0) -> BenchResult:
+    r = BenchResult(f"Conjunction detection ({n}×{n} pairs, {int(lookahead/3600)}h)")
+    sats, debs = gen_states(n)
+
+    # Python
+    def py():
+        PyDetector().detect(sats, debs, lookahead_s=lookahead, step_s=step)
+    r.py_s = _t(py)
+
+    # C++ (no NumPy path for conjunction)
+    r.np_s = None
+
+    # C++
+    if _HAS_CPP:
+        def cpp():
+            _cpp.ConjunctionDetector().detect(sats, debs, lookahead, step)
+        r.cpp_s = _t(cpp)
+
+    # CUDA
+    if _HAS_CUDA and hasattr(_cpp, 'cuda_detect_conjunctions'):
+        def cuda():
+            _cpp.cuda_detect_conjunctions(sats, debs, lookahead, step)
+        r.cuda_s = _t(cuda)
+
+    return r
+
+
+def bench_fuel(iters: int) -> BenchResult:
+    r = BenchResult(f"Fuel calculation ({iters:,} iters)")
+    dv = [0.1, 0.2, 0.3]
+
+    def py():
+        t = PyFuelTracker(INITIAL_FUEL)
+        for _ in range(iters): t.calculate_fuel_cost(dv)
+    r.py_s = _t(py)
+    r.np_s = None  # no numpy path
+
+    if _HAS_CPP:
+        def cpp():
+            t = _cpp.FuelTracker(INITIAL_FUEL, DRY_MASS)
+            for _ in range(iters): t.calculate_fuel_cost(dv)
+        r.cpp_s = _t(cpp)
+
+    return r
+
+
+def bench_maneuver(iters: int) -> BenchResult:
+    r = BenchResult(f"Maneuver calculation ({iters:,} iters)")
+    w = ConjunctionWarning(
+        sat_id=0, debris_id=1, current_distance=5.0,
+        time_to_closest_approach=3600.0, severity="WARNING",
+        relative_velocity=[0.1, 0.2, 0.3])
+
+    def py():
+        calc = PyManeuverCalc()
+        for _ in range(iters): calc.calculate(ISS_STATE, w)
+    r.py_s = _t(py)
+    r.np_s = None
+    # C++ maneuver cannot accept Python ConjunctionWarning type
+    r.note = "C++/CUDA skipped (type boundary)"
+    return r
+
+
+# ── Report ────────────────────────────────────────────────────────────────────
+
+def print_header():
+    sep = "─" * 110
+    print(f"\n{'Astrosis Three-Way Performance Benchmark':^110}")
+    print(sep)
+    backends = []
+    backends.append("Python ✓")
+    backends.append("NumPy ✓")
+    backends.append(f"C++ {'✓' if _HAS_CPP else '✗'}")
+    backends.append(f"CUDA {'✓' if _HAS_CUDA else '✗ (no nvcc)'}")
+    print(f"  Backends: {' │ '.join(backends)}")
+    if _HAS_CUDA:
+        _cpp.cuda_print_device_info()
+    print(sep)
+    print(f"  {'Benchmark':<38} │ {'Python':>12} │ {'NumPy':>12} │ "
+          f"{'C++ (speedup)':>22} │ {'CUDA (speedup)':>22}")
+    print(sep)
+
+
+def print_footer(results: List[BenchResult]):
+    sep = "─" * 110
+    print(sep)
+    # Summary speedups (batch propagation is the key metric)
+    batch = next((r for r in results if "Batch" in r.name), None)
+    if batch:
+        print(f"\n  Key metric — Batch Propagation:")
+        if batch.np_s:
+            print(f"    NumPy  vs Python: {batch.speedup(batch.py_s, batch.np_s):>8}")
+        if batch.cpp_s:
+            print(f"    C++    vs Python: {batch.speedup(batch.py_s, batch.cpp_s):>8}")
+        if batch.cuda_s:
+            print(f"    CUDA   vs Python: {batch.speedup(batch.py_s, batch.cuda_s):>8}")
+            if batch.cpp_s:
+                print(f"    CUDA   vs C++:    {batch.speedup(batch.cpp_s, batch.cuda_s):>8}")
+
+    if not _HAS_CPP:
+        print("\n  ⚠  C++ module not built. Run: cd cpp && mkdir build && cd build && cmake .. && make")
+    if not _HAS_CUDA:
+        print("  ⚠  CUDA not available. Install CUDA Toolkit, then: cmake .. -DUSE_CUDA=ON && make")
+    print()
+
+
+def main(quick: bool = False):
+    print_header()
+    results = []
+
+    if quick:
+        configs = dict(single_iters=5_000, batch_n=200, batch_steps=100,
+                       conj_n=50, fuel_iters=10_000, man_iters=1_000)
+    else:
+        configs = dict(single_iters=50_000, batch_n=1_000, batch_steps=864,
+                       conj_n=200, fuel_iters=100_000, man_iters=10_000)
+
+    for fn, args in [
+        (bench_single_propagation, (configs['single_iters'],)),
+        (bench_batch_propagation,  (configs['batch_n'], configs['batch_steps'])),
+        (bench_batch_propagation,  (configs['batch_n']*5, configs['batch_steps'])),
+        (bench_conjunction,        (configs['conj_n'],)),
+        (bench_conjunction,        (configs['conj_n']*2, 7200.0, 60.0)),
+        (bench_fuel,               (configs['fuel_iters'],)),
+        (bench_maneuver,           (configs['man_iters'],)),
+    ]:
+        r = fn(*args)
+        results.append(r)
+        print(r.row() + (f"  [{r.note}]" if r.note else ""))
+
+    print_footer(results)
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Astrosis backend benchmark")
+    parser.add_argument("--quick", action="store_true",
+                        help="Run smaller workloads for fast iteration")
+    args = parser.parse_args()
+    main(quick=args.quick)
