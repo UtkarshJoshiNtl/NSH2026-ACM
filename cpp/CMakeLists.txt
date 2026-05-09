@@ -49,7 +49,7 @@ if(HAS_CUDA)
     pybind11_add_module(physics_engine ${CPP_SOURCES})
     target_compile_definitions(physics_engine PRIVATE USE_CUDA)
     set_target_properties(physics_engine PROPERTIES
-        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_SEPARABLE_COMPILATION OFF
     )
 else()
     pybind11_add_module(physics_engine ${CPP_SOURCES})

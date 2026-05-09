@@ -8,12 +8,12 @@
 // Note: __constant__ must be defined in the .cu file, so we use a macro or inline.
 // However, to avoid duplicate definition errors during linking, we use a single source.
 
-__constant__ double C_MU=398600.4418, C_RE=6378.137;
-__constant__ double C_J2=1.08263e-3, C_J3=-2.53266e-6, C_J4=-1.61990e-6;
-__constant__ double C_OMEGA=7.2921150e-5;
+static __constant__ double C_MU=398600.4418, C_RE=6378.137;
+static __constant__ double C_J2=1.08263e-3, C_J3=-2.53266e-6, C_J4=-1.61990e-6;
+static __constant__ double C_OMEGA=7.2921150e-5;
 
 struct CA { double alt, H, rho0; };
-__constant__ CA C_ATM[28]={
+static __constant__ CA C_ATM[28]={
     {0,8.44,1.225},{25,6.49,3.899e-2},{30,6.75,1.774e-2},{40,7.58,3.972e-3},
     {50,8.55,1.057e-3},{60,7.71,3.206e-4},{70,6.55,8.770e-5},{80,5.79,1.905e-5},
     {90,5.57,3.396e-6},{100,5.90,5.297e-7},{110,7.17,9.661e-8},{120,9.59,2.438e-8},

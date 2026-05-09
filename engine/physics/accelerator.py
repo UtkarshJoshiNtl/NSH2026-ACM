@@ -123,14 +123,11 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
     """
     # ── CUDA GPU ──────────────────────────────────────────────────────────────
     if _HAS_CUDA:
-        arr = np.array(states, dtype=np.float64).ravel()
-        n = len(states)
         if with_drag:
-            _physics.cuda_propagate_batch_drag(arr, n, dt_seconds, steps,
-                                                area, mass, cd)
-        else:
-            _physics.cuda_propagate_batch(arr, n, dt_seconds, steps)
-        return arr.reshape(n, 6).tolist()
+            return [list(s) for s in _physics.cuda_propagate_batch_drag(
+                states, dt_seconds, steps, area, mass, cd)]
+        return [list(s) for s in _physics.cuda_propagate_batch(
+            states, dt_seconds, steps)]
 
     # ── C++ batch (GIL-released, optionally OpenMP) ───────────────────────────
     if _HAS_BATCH_CPP:

@@ -335,7 +335,12 @@ PYBIND11_MODULE(physics_engine, m) {
             py::list s = states[i];
             for(int k=0; k<6; k++) flat[i*6+k] = s[k].cast<double>();
         }
-        cuda_propagate_batch(flat.data(), n, dt, steps);
+        
+        {
+            py::gil_scoped_release release;
+            cuda_propagate_batch(flat.data(), n, dt, steps);
+        }
+
         py::list out;
         for(int i=0; i<n; i++) {
             py::list s;
@@ -343,8 +348,7 @@ PYBIND11_MODULE(physics_engine, m) {
             out.append(s);
         }
         return out;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
-       py::call_guard<py::gil_scoped_release>());
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
 
     m.def("cuda_propagate_batch_drag", [](py::list states, double dt, int steps, 
                                           double area, double mass, double cd) {
@@ -354,7 +358,12 @@ PYBIND11_MODULE(physics_engine, m) {
             py::list s = states[i];
             for(int k=0; k<6; k++) flat[i*6+k] = s[k].cast<double>();
         }
-        cuda_propagate_batch_drag(flat.data(), n, dt, steps, area, mass, cd);
+
+        {
+            py::gil_scoped_release release;
+            cuda_propagate_batch_drag(flat.data(), n, dt, steps, area, mass, cd);
+        }
+
         py::list out;
         for(int i=0; i<n; i++) {
             py::list s;
@@ -363,8 +372,7 @@ PYBIND11_MODULE(physics_engine, m) {
         }
         return out;
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
-       py::arg("area"), py::arg("mass"), py::arg("cd"),
-       py::call_guard<py::gil_scoped_release>());
+       py::arg("area"), py::arg("mass"), py::arg("cd"));
 
     m.def("cuda_detect_conjunctions", &cuda_detect_conjunctions,
           py::arg("sat_states"), py::arg("debris_states"),

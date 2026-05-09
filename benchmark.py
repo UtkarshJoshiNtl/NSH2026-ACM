@@ -150,10 +150,8 @@ def bench_batch_propagation(n: int, steps: int) -> BenchResult:
 
     # CUDA
     if _HAS_CUDA:
-        arr = np.array(sats, dtype=np.float64).ravel()
         def cuda():
-            a = arr.copy()
-            _cpp.cuda_propagate_batch(a, n, dt, steps)
+            _cpp.cuda_propagate_batch(sats, dt, steps)
         r.cuda_s = _t(cuda)
 
     return r

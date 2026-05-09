@@ -1,21 +1,23 @@
 
                                    Astrosis Three-Way Performance Benchmark                                   
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Backends: Python ✓ │ NumPy ✓ │ C++ ✓ │ CUDA ✗ (no nvcc)
+  Backends: Python ✓ │ NumPy ✓ │ C++ ✓ │ CUDA ✓
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Benchmark                              │       Python │        NumPy │          C++ (speedup) │         CUDA (speedup)
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  Single propagation (5,000 iters)       │     35.2 ms │   1116.2 ms │      2.6 ms (× 13.4×) │        N/A (×   N/A)
-  Batch propagation (200 sats × 100 steps) │    144.8 ms │     27.5 ms │      2.6 ms (× 56.0×) │        N/A (×   N/A)
-  Batch propagation (1,000 sats × 100 steps) │    735.6 ms │     45.9 ms │      1.7 ms (×423.0×) │        N/A (×   N/A)
-  Conjunction detection (50×50 pairs, 1h) │     37.9 ms │        N/A │     27.6 ms (×  1.4×) │        N/A (×   N/A)
-  Conjunction detection (100×100 pairs, 2h) │    307.2 ms │        N/A │    218.4 ms (×  1.4×) │        N/A (×   N/A)
-  Fuel calculation (10,000 iters)        │      3.9 ms │        N/A │      2.3 ms (×  1.7×) │        N/A (×   N/A)
-  Maneuver calculation (1,000 iters)     │     29.4 ms │        N/A │      0.5 ms (× 55.5×) │        N/A (×   N/A)
+  Single propagation (5,000 iters)       │     35.8 ms │   1185.9 ms │      2.7 ms (× 13.4×) │        N/A (×   N/A)
+  Batch propagation (200 sats × 100 steps) │    147.5 ms │     26.6 ms │      1.8 ms (× 83.7×) │    938.3 ms (×  0.2×)
+  Batch propagation (1,000 sats × 100 steps) │    739.9 ms │     47.1 ms │      2.0 ms (×376.5×) │      7.2 ms (×102.1×)
+  Conjunction detection (50×50 pairs, 1h) │    129.8 ms │        N/A │     28.1 ms (×  4.6×) │    294.4 ms (×  0.4×)
+  Conjunction detection (100×100 pairs, 2h) │    518.1 ms │        N/A │    231.9 ms (×  2.2×) │     37.4 ms (× 13.9×)
+  Fuel calculation (10,000 iters)        │      4.2 ms │        N/A │      2.4 ms (×  1.7×) │        N/A (×   N/A)
+  Maneuver calculation (1,000 iters)     │     28.7 ms │        N/A │      0.5 ms (× 53.1×) │        N/A (×   N/A)
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   Key metric — Batch Propagation:
-    NumPy  vs Python:     5.3×
-    C++    vs Python:    56.0×
-  ⚠  CUDA not available. Install CUDA Toolkit, then: cmake .. -DUSE_CUDA=ON && make
+    NumPy  vs Python:     5.5×
+    C++    vs Python:    83.7×
+    CUDA   vs Python:     0.2×
+    CUDA   vs C++:        0.0×
 
+GPU 0: NVIDIA GeForce RTX 2050 | SM 8.6 | 4294 MB | 16 SMs
