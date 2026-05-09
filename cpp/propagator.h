@@ -2,19 +2,9 @@
 #include <array>
 #include <vector>
 
+#include "physics_constants.h"
+
 using StateVector = std::array<double, 6>;
-
-// ── Physics constants ────────────────────────────────────────────────────────
-constexpr double MU         = 398600.4418;      // km³/s²
-constexpr double RE         = 6378.137;         // km
-constexpr double J2         = 1.08263e-3;       // EGM96
-constexpr double J3         = -2.53266e-6;      // EGM96
-constexpr double J4         = -1.61990e-6;      // EGM96
-constexpr double OMEGA_EARTH = 7.2921150e-5;    // rad/s
-
-// ── Satellite defaults ───────────────────────────────────────────────────────
-constexpr double INITIAL_FUEL = 50.0;
-constexpr double DRY_MASS     = 500.0;
 
 class Propagator {
 public:

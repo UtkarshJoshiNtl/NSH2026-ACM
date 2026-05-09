@@ -10,6 +10,7 @@
 #include "fuel.h"
 #include "conjunction.h"
 #include "maneuver.h"
+#include "cuda_bridge.h"
 #include <cmath>
 #include <algorithm>
 #include <pybind11/pybind11.h>
@@ -70,7 +71,7 @@ std::array<double,3> Propagator::acceleration(const std::array<double,3>& r) con
     double j3f   = 2.5 * J3 * MU * RE * RE * RE / r7;
     ax += j3f * x * (7.0 * z2_r2 * z_r - 3.0 * z_r);
     ay += j3f * y * (7.0 * z2_r2 * z_r - 3.0 * z_r);
-    az += j3f * (7.0 * z2_r2 * z_r * z - 6.0 * z2_r2 + 0.6);
+    az += j3f * (7.0 * z2_r2 * z_r * z - 6.0 * z2_r2 + (3.0 / 5.0));
 
     // J4
     double z4_r4 = z2_r2 * z2_r2;
@@ -319,4 +320,55 @@ PYBIND11_MODULE(physics_engine, m) {
         .def(py::init<>())
         .def("calculate", &ManeuverCalculator::calculate,
              py::arg("sat_state"), py::arg("warning"));
+
+    // ── CUDA GPU Acceleration (Optional) ─────────────────────────────────────
+    m.def("cuda_available", &cuda_available, "Returns true if an NVIDIA GPU is found.");
+    
+#ifdef USE_CUDA
+    m.def("cuda_device_count", &cuda_device_count);
+    m.def("cuda_print_device_info", &cuda_print_device_info);
+
+    m.def("cuda_propagate_batch", [](py::list states, double dt, int steps) {
+        int n = (int)states.size();
+        std::vector<double> flat(n * 6);
+        for(int i=0; i<n; i++) {
+            py::list s = states[i];
+            for(int k=0; k<6; k++) flat[i*6+k] = s[k].cast<double>();
+        }
+        cuda_propagate_batch(flat.data(), n, dt, steps);
+        py::list out;
+        for(int i=0; i<n; i++) {
+            py::list s;
+            for(int k=0; k<6; k++) s.append(flat[i*6+k]);
+            out.append(s);
+        }
+        return out;
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
+       py::call_guard<py::gil_scoped_release>());
+
+    m.def("cuda_propagate_batch_drag", [](py::list states, double dt, int steps, 
+                                          double area, double mass, double cd) {
+        int n = (int)states.size();
+        std::vector<double> flat(n * 6);
+        for(int i=0; i<n; i++) {
+            py::list s = states[i];
+            for(int k=0; k<6; k++) flat[i*6+k] = s[k].cast<double>();
+        }
+        cuda_propagate_batch_drag(flat.data(), n, dt, steps, area, mass, cd);
+        py::list out;
+        for(int i=0; i<n; i++) {
+            py::list s;
+            for(int k=0; k<6; k++) s.append(flat[i*6+k]);
+            out.append(s);
+        }
+        return out;
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
+       py::arg("area"), py::arg("mass"), py::arg("cd"),
+       py::call_guard<py::gil_scoped_release>());
+
+    m.def("cuda_detect_conjunctions", &cuda_detect_conjunctions,
+          py::arg("sat_states"), py::arg("debris_states"),
+          py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0,
+          py::call_guard<py::gil_scoped_release>());
+#endif
 }

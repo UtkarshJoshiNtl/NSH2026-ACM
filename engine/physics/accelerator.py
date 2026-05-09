@@ -16,7 +16,7 @@ import numpy as np
 from ..constants import DRY_MASS, INITIAL_FUEL
 
 # Python fallbacks
-from .propagator import rk4_py, rk4_py_drag, propagate_batch_numpy
+from .propagator import rk4_step, propagate_batch_numpy
 from .fuel import FuelTracker as PyFuelTracker
 from .conjunction import ConjunctionDetector as PyConjunctionDetector
 from .maneuver import ManeuverCalculator as PyManeuverCalculator
@@ -72,7 +72,7 @@ def propagate(state: list, dt_seconds: float) -> list:
     """Propagate a single satellite one RK4 step."""
     if _HAS_CPP:
         return list(_physics.Propagator().propagate(state, dt_seconds))
-    return list(rk4_py(tuple(state), dt_seconds))
+    return list(rk4_step(tuple(state), dt_seconds))
 
 
 def propagate_with_drag(state: list, dt_seconds: float,
@@ -82,7 +82,7 @@ def propagate_with_drag(state: list, dt_seconds: float,
     if _HAS_CPP:
         return list(_physics.Propagator().propagate_with_drag(
             state, dt_seconds, area, mass, cd))
-    return list(rk4_py_drag(tuple(state), dt_seconds, area, mass, cd))
+    return list(rk4_step(tuple(state), dt_seconds, area, mass, cd))
 
 
 def propagate_steps(state: list, total_seconds: float,
@@ -96,7 +96,7 @@ def propagate_steps(state: list, total_seconds: float,
     rem = total_seconds
     while rem > 0:
         dt = min(step_size, rem)
-        curr = rk4_py(curr, dt)
+        curr = rk4_step(curr, dt)
         rem -= dt
     return list(curr)
 

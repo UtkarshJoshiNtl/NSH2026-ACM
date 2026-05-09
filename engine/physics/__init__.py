@@ -1,4 +1,4 @@
-from .propagator import rk4_py, rk4_py_drag
+from .propagator import rk4_step
 from .fuel import FuelTracker
 from .conjunction import ConjunctionDetector, ConjunctionWarning
 from .maneuver import ManeuverCalculator, ManeuverPlan

@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'cpp', 'build'))
 sys.path.insert(0, os.path.dirname(__file__))
 
 # ── Import backends directly so we can force each one ────────────────────────
-from engine.physics.propagator import rk4_py, rk4_py_drag, propagate_batch_numpy
+from engine.physics.propagator import rk4_step, propagate_batch_numpy
 from engine.physics.conjunction import ConjunctionDetector as PyDetector
 from engine.physics.fuel import FuelTracker as PyFuelTracker
 from engine.physics.maneuver import ManeuverCalculator as PyManeuverCalc, ManeuverPlan
@@ -101,7 +101,7 @@ def bench_single_propagation(iters: int) -> BenchResult:
     # Python
     def py():
         s = tuple(ISS_STATE)
-        for _ in range(iters): s = rk4_py(s, 10.0)
+        for _ in range(iters): s = rk4_step(s, 10.0)
     r.py_s = _t(py)
 
     # NumPy (batch of 1)
@@ -133,7 +133,7 @@ def bench_batch_propagation(n: int, steps: int) -> BenchResult:
     def py():
         ss = [tuple(s) for s in sats]
         for _ in range(steps):
-            ss = [rk4_py(s, dt) for s in ss]
+            ss = [rk4_step(s, dt) for s in ss]
     r.py_s = _t(py)
 
     # NumPy vectorized
@@ -207,18 +207,36 @@ def bench_fuel(iters: int) -> BenchResult:
 
 def bench_maneuver(iters: int) -> BenchResult:
     r = BenchResult(f"Maneuver calculation ({iters:,} iters)")
-    w = ConjunctionWarning(
-        sat_id=0, debris_id=1, current_distance=5.0,
-        time_to_closest_approach=3600.0, severity="WARNING",
-        relative_velocity=[0.1, 0.2, 0.3])
+    if _HAS_CPP:
+        w = _cpp.ConjunctionWarning()
+        w.sat_id = 0
+        w.debris_id = 1
+        w.current_distance = 5.0
+        w.time_to_closest_approach = 3600.0
+        w.severity = "WARNING"
+        w.relative_velocity = [0.1, 0.2, 0.3]
+    else:
+        w = ConjunctionWarning(
+            sat_id=0, debris_id=1, current_distance=5.0,
+            time_to_closest_approach=3600.0, severity="WARNING",
+            relative_velocity=[0.1, 0.2, 0.3])
 
     def py():
         calc = PyManeuverCalc()
-        for _ in range(iters): calc.calculate(ISS_STATE, w)
+        # If we have C++ warning, we might need a Python one for the Python calculator
+        py_w = w
+        if _HAS_CPP:
+             py_w = ConjunctionWarning(
+                sat_id=w.sat_id, debris_id=w.debris_id, current_distance=w.current_distance,
+                time_to_closest_approach=w.time_to_closest_approach, severity=w.severity,
+                relative_velocity=list(w.relative_velocity))
+        for _ in range(iters): calc.calculate(ISS_STATE, py_w)
     r.py_s = _t(py)
-    r.np_s = None
-    # C++ maneuver cannot accept Python ConjunctionWarning type
-    r.note = "C++/CUDA skipped (type boundary)"
+    if _HAS_CPP:
+        calc = _cpp.ManeuverCalculator()
+        def cpp():
+            for _ in range(iters): calc.calculate(ISS_STATE, w)
+        r.cpp_s = _t(cpp)
     return r
 
 

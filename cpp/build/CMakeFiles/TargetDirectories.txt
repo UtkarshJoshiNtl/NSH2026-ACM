@@ -1,3 +1,0 @@
-/home/Code1/dev/Projects/Astrosis/astrosis/cpp/build/CMakeFiles/physics_engine.dir
-/home/Code1/dev/Projects/Astrosis/astrosis/cpp/build/CMakeFiles/edit_cache.dir
-/home/Code1/dev/Projects/Astrosis/astrosis/cpp/build/CMakeFiles/rebuild_cache.dir

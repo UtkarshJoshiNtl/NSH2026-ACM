@@ -25,6 +25,23 @@ class ManeuverCalculator:
     def __init__(self):
         pass
 
+    def _create_plan(self, sat_state: List[float], dv_eci: np.ndarray) -> ManeuverPlan:
+        """Helper to calculate fuel cost and create a ManeuverPlan."""
+        evasion_dv = list(dv_eci)
+        recovery_dv = list(-dv_eci)
+        
+        tracker = FuelTracker()
+        cost_evasion = tracker.calculate_fuel_cost(evasion_dv)
+        tracker.apply_burn(evasion_dv)
+        cost_recovery = tracker.calculate_fuel_cost(recovery_dv)
+        
+        return ManeuverPlan(
+            evasion_dv_eci=evasion_dv,
+            recovery_dv_eci=recovery_dv,
+            fuel_cost_kg=cost_evasion + cost_recovery,
+            burn_timing_offset_s=COOLDOWN_S
+        )
+
     def calculate(
         self,
         sat_state: List[float],
@@ -41,40 +58,9 @@ class ManeuverCalculator:
         if rv_mag < 1e-9:
             # Fallback: when relative velocity is zero, burn radially outward
             r_hat = r / np.linalg.norm(r)
-            evasion_dv_eci = r_hat * MAX_DV
-            recovery_dv_eci = -evasion_dv_eci
-            tracker = FuelTracker()
-            cost_evasion = tracker.calculate_fuel_cost(list(evasion_dv_eci))
-            tracker.apply_burn(list(evasion_dv_eci))
-            cost_recovery = tracker.calculate_fuel_cost(list(recovery_dv_eci))
-            return ManeuverPlan(
-                evasion_dv_eci=list(evasion_dv_eci),
-                recovery_dv_eci=list(recovery_dv_eci),
-                fuel_cost_kg=cost_evasion + cost_recovery,
-                burn_timing_offset_s=COOLDOWN_S
-            )
+            return self._create_plan(sat_state, r_hat * MAX_DV)
 
         # Strategy: Burn in the "Normal" direction (h = r x v)
-        # This changes the orbit inclination slightly, which is very effective for evasion
-        # without changing orbital energy (semi-major axis).
         h = np.cross(r, v)
         h_hat = h / np.linalg.norm(h)
-        
-        # Evasion Delta-V
-        evasion_dv_eci = h_hat * MAX_DV
-        
-        # Recovery Delta-V (equal and opposite to return to original orbit)
-        recovery_dv_eci = -evasion_dv_eci
-        
-        # Calculate fuel cost
-        tracker = FuelTracker()
-        cost_evasion = tracker.calculate_fuel_cost(list(evasion_dv_eci))
-        tracker.apply_burn(list(evasion_dv_eci))
-        cost_recovery = tracker.calculate_fuel_cost(list(recovery_dv_eci))
-        
-        return ManeuverPlan(
-            evasion_dv_eci=list(evasion_dv_eci),
-            recovery_dv_eci=list(recovery_dv_eci),
-            fuel_cost_kg=cost_evasion + cost_recovery,
-            burn_timing_offset_s=COOLDOWN_S
-        )
+        return self._create_plan(sat_state, h_hat * MAX_DV)

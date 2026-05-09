@@ -36,8 +36,8 @@ def _teme_to_eci(r_teme: np.ndarray, v_teme: np.ndarray, dt: datetime):
         [0,      0,     1],
     ])
     # For velocity: Omega_earth cross r must be removed to go TEME → ECI
-    OMEGA = 7.2921150e-5  # rad/s
-    omega_vec = np.array([0.0, 0.0, OMEGA])
+    from .constants import OMEGA_EARTH
+    omega_vec = np.array([0.0, 0.0, OMEGA_EARTH])
     v_eci = R @ v_teme + np.cross(omega_vec, R @ r_teme)
     r_eci = R @ r_teme
     return r_eci, v_eci

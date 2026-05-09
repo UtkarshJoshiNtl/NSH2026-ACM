@@ -3,8 +3,7 @@
 #include <vector>
 #include <array>
 
-const double CRITICAL_DISTANCE = 0.1;   // km
-const double WARNING_DISTANCE = 1.0;    // km
+#include "physics_constants.h"
 
 struct ConjunctionWarning {
     int sat_id;

@@ -6,7 +6,6 @@ Defines the local state objects for running single instances of the analysis eng
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
-import time
 from .constants import INITIAL_FUEL, DRY_MASS
 
 @dataclass

@@ -10,12 +10,8 @@ RE = 6378.137           # Earth equatorial radius         [km]
 J2 = 1.08263e-3         # Earth oblateness J2 (EGM96)   [dimensionless]
 J3 = -2.53266e-6        # Earth pear-shape J3 (EGM96)   [dimensionless]
 J4 = -1.61990e-6        # J4 (EGM96)                    [dimensionless]
-J5 =  2.27460e-7        # J5 (EGM96)                    [dimensionless]
-J6 = -5.40660e-7        # J6 (EGM96)                    [dimensionless]
 OMEGA_EARTH = 7.2921150e-5  # Earth rotation rate         [rad/s]
 
-# ── Solar Radiation Pressure ─────────────────────────────────────────────────
-P_SRP = 4.56e-6         # Solar radiation pressure @ 1 AU [N/m²]
 
 # ── WGS-84 Ellipsoid ─────────────────────────────────────────────────────────
 F_WGS84  = 1.0 / 298.257223563

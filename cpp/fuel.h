@@ -1,12 +1,7 @@
 #pragma once
 #include <array>
 
-const double ISP = 300.0;
-const double G0 = 0.00980665;
-const double DRY_MASS = 500.0;
-const double INITIAL_FUEL = 50.0;
-const double MAX_DV = 0.015;
-const double COOLDOWN_S = 600.0;
+#include "physics_constants.h"
 
 class FuelTracker {
 public:

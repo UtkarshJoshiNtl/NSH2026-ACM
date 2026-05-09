@@ -22,7 +22,7 @@ bool FuelTracker::is_empty() const {
 
 double FuelTracker::calculate_fuel_cost(const std::array<double, 3>& delta_v) const {
     double dv_mag = std::sqrt(delta_v[0]*delta_v[0] + delta_v[1]*delta_v[1] + delta_v[2]*delta_v[2]);
-    return current_mass() * (1.0 - std::exp(-dv_mag / (ISP * G0)));
+    return current_mass() * (1.0 - std::exp(-dv_mag / (ISP * G0_KM)));
 }
 
 void FuelTracker::apply_burn(const std::array<double, 3>& delta_v) {
