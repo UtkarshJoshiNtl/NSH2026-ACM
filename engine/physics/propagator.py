@@ -12,6 +12,40 @@ import numpy as np
 from ..constants import MU, RE, J2, J3, J4, OMEGA_EARTH
 
 
+def _calculate_gravity_acceleration(x, y, z, r_mag, r2, r3, r5, r7):
+    """
+    Calculate gravitational acceleration including J2, J3, J4 perturbations.
+    Returns (ax, ay, az) tuple.
+    """
+    # Two-body gravity
+    ax = -MU * x / r3
+    ay = -MU * y / r3
+    az = -MU * z / r3
+
+    # J2
+    z2_r2 = (z * z) / r2
+    j2f = 1.5 * J2 * MU * RE * RE / r5
+    ax += j2f * x * (5.0 * z2_r2 - 1.0)
+    ay += j2f * y * (5.0 * z2_r2 - 1.0)
+    az += j2f * z * (5.0 * z2_r2 - 3.0)
+
+    # J3
+    zr = z / r_mag
+    j3f = 2.5 * J3 * MU * RE**3 / r7
+    ax += j3f * x * (7.0 * z2_r2 * zr - 3.0 * zr)
+    ay += j3f * y * (7.0 * z2_r2 * zr - 3.0 * zr)
+    az += j3f * (7.0 * z2_r2 * zr * z - 6.0 * z2_r2 + (3.0 / 5.0))
+
+    # J4
+    z4_r4 = z2_r2 * z2_r2
+    j4f = 0.625 * J4 * MU * RE**4 / r7
+    ax += j4f * x * (3.0 - 42.0 * z2_r2 + 63.0 * z4_r4)
+    ay += j4f * y * (3.0 - 42.0 * z2_r2 + 63.0 * z4_r4)
+    az += j4f * z * (15.0 - 70.0 * z2_r2 + 63.0 * z4_r4)
+    
+    return ax, ay, az
+
+
 # ---------------------------------------------------------------------------
 # US Standard Atmosphere 1976 — piecewise exponential density table (kg/m³)
 # Each tuple: (alt_base_km, scale_height_km, rho_base)
@@ -78,31 +112,8 @@ def rk4_step(state: tuple, dt: float,
         r5 = r3 * r2
         r7 = r5 * r2
 
-        # Two-body gravity
-        ax = -MU * x / r3
-        ay = -MU * y / r3
-        az = -MU * z / r3
-
-        # J2
-        z2_r2 = (z * z) / r2
-        j2f = 1.5 * J2 * MU * RE * RE / r5
-        ax += j2f * x * (5.0 * z2_r2 - 1.0)
-        ay += j2f * y * (5.0 * z2_r2 - 1.0)
-        az += j2f * z * (5.0 * z2_r2 - 3.0)
-
-        # J3
-        zr = z / r_mag
-        j3f = 2.5 * J3 * MU * RE**3 / r7
-        ax += j3f * x * (7.0 * z2_r2 * zr - 3.0 * zr)
-        ay += j3f * y * (7.0 * z2_r2 * zr - 3.0 * zr)
-        az += j3f * (7.0 * z2_r2 * zr * z - 6.0 * z2_r2 + (3.0 / 5.0))
-
-        # J4
-        z4_r4 = z2_r2 * z2_r2
-        j4f = 0.625 * J4 * MU * RE**4 / r7
-        ax += j4f * x * (3.0 - 42.0 * z2_r2 + 63.0 * z4_r4)
-        ay += j4f * y * (3.0 - 42.0 * z2_r2 + 63.0 * z4_r4)
-        az += j4f * z * (15.0 - 70.0 * z2_r2 + 63.0 * z4_r4)
+        # Calculate gravity with J2, J3, J4 perturbations
+        ax, ay, az = _calculate_gravity_acceleration(x, y, z, r_mag, r2, r3, r5, r7)
 
         # Atmospheric drag
         if area > 0 and mass > 0:
@@ -155,6 +166,35 @@ def rk4_step(state: tuple, dt: float,
 def _accel_batch(R: np.ndarray, V: np.ndarray,
                  area: float = 0.0, mass: float = 1.0, cd: float = 2.2,
                  with_drag: bool = False) -> np.ndarray:
+    # Scalar Fast-Path: If N=1, use math module instead of np.linalg for better performance
+    if R.shape[0] == 1:
+        x, y, z = R[0, 0], R[0, 1], R[0, 2]
+        r_mag = math.sqrt(x*x + y*y + z*z)
+        r2 = r_mag * r_mag
+        r3 = r2 * r_mag
+        r5 = r3 * r2
+        r7 = r5 * r2
+
+        # Calculate gravity with J2, J3, J4 perturbations
+        ax, ay, az = _calculate_gravity_acceleration(x, y, z, r_mag, r2, r3, r5, r7)
+
+        if with_drag and mass > 0:
+            alt = r_mag - RE
+            if 0.0 <= alt < 1000.0:
+                rho = get_atmospheric_density(alt)
+                if rho > 0:
+                    vr_x = V[0, 0] + OMEGA_EARTH * y
+                    vr_y = V[0, 1] - OMEGA_EARTH * x
+                    vr_z = V[0, 2]
+                    v_rel_mag = math.sqrt(vr_x*vr_x + vr_y*vr_y + vr_z*vr_z)
+                    if v_rel_mag > 0:
+                        drag_coeff = -0.5 * cd * (area / mass) * rho * v_rel_mag * 1000.0
+                        ax += drag_coeff * vr_x
+                        ay += drag_coeff * vr_y
+                        az += drag_coeff * vr_z
+        return np.array([[ax, ay, az]])
+
+    # Vectorized path
     x, y, z = R[:, 0], R[:, 1], R[:, 2]
     r_mag = np.linalg.norm(R, axis=1)
     r2 = r_mag ** 2
@@ -163,6 +203,9 @@ def _accel_batch(R: np.ndarray, V: np.ndarray,
     r7 = r5 * r2
 
     A = np.zeros_like(R)
+    
+    # Calculate gravity with J2, J3, J4 perturbations (vectorized)
+    # Two-body gravity
     inv_r3 = MU / r3
     A[:, 0] = -inv_r3 * x
     A[:, 1] = -inv_r3 * y

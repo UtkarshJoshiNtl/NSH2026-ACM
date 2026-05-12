@@ -18,6 +18,10 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LOCAL_CACHE_DIR = os.path.join(ROOT_DIR, ".cache", "tle")
 CELESTRAK_API_URL = "https://celestrak.org/NORAD/elements/gp.php"
 
+# TLE epoch year cutoff: years < 57 are 2000+, years >= 57 are 1900+
+# This is a standard TLE convention for two-digit years
+EPOCH_YEAR_CUTOFF = 57
+
 
 class TLEIngestor:
     """Service for ingesting TLE data from Celestrak and caching locally."""
@@ -125,7 +129,7 @@ class TLEIngestor:
                     try:
                         year_str = line1[18:20]
                         day_str = line1[20:32]
-                        year = 2000 + int(year_str) if int(year_str) < 57 else 1900 + int(year_str)
+                        year = 2000 + int(year_str) if int(year_str) < EPOCH_YEAR_CUTOFF else 1900 + int(year_str)
                         day_of_year = float(day_str)
                         epoch = datetime(year, 1, 1) + timedelta(days=day_of_year - 1)
                     except (ValueError, IndexError):
