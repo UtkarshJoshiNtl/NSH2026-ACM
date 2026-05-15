@@ -32,7 +32,6 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y cmake g++
     - name: Build C++ engine
       run: |
-        PYBIND11_DIR=$(python3 -c "import pybind11; print(pybind11.get_cmake_dir())")
         cd cpp && mkdir -p build && cd build
-        cmake .. -DUSE_CUDA=OFF -DCMAKE_PREFIX_PATH="$PYBIND11_DIR"
+        cmake .. -DUSE_CUDA=OFF
         make -j$(nproc)
