@@ -1,150 +1,302 @@
-# Astrosis: Orbital Analysis Engine
+# Astrosis: High-Performance Orbital Mechanics Engine
 
-A high-performance orbital simulation and analysis engine for satellite situational awareness (SSA) and mission planning.
+[![Backend: CUDA](https://img.shields.io/badge/Backend-CUDA_12.9-76b900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
+[![Backend: C++](https://img.shields.io/badge/Backend-C++20-00599C?logo=c%2B%2B)](https://isocpp.org/)
+[![Physics: RK4](https://img.shields.io/badge/Physics-RK4_Integration-ff69b4)](docs/architecture.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-## Features
+**Batch propagation and conjunction analysis for 1,000+ satellites on consumer hardware.**
 
-- **High-Fidelity Propagation**: RK4 numerical integration with J2 perturbation and US Standard Atmosphere 1976 drag model.
-- **Full Python Parity**: Every physics component has a pure Python implementation for maximum portability, with an optional C++ accelerator for high-performance batch processing.
-- **Conjunction Analysis**: Temporal sweep and spatial culling (KD-Tree) for detecting close approaches between satellites and debris.
-- **Maneuver Planning**: Automated impulsive burn calculation (Radial-Normal strategy) for evasion and station-keeping, including fuel budgeting.
-- **Coordinate Systems**: Support for ECI (pseudo-J2000), ECEF (WGS-84), Geodetic, and Topocentric (AER) frames.
-- **Visibility & Eclipse**: Precise Earth shadow modeling (Conical Umbra/Penumbra) and ground station line-of-sight analysis.
-- **Live Data**: Seamless ingestion and local caching of TLE data from CelesTrak.
+Astrosis is an **engineering-grade orbital simulation engine** designed for high-throughput space situational awareness (SSA). It enables rapid analysis of satellite constellations through GPU-accelerated numerical integration and proven physics models.
 
-## Architecture
+**Primary Focus:** Orbital propagation, conjunction screening, and maneuver planning for research and analysis.
 
-The project is structured as a clean Python package with an optional C++ accelerator:
+**Not intended as:** A replacement for operational systems like NASA GMAT, AGI STK, or commercial SSA platforms.
+
+---
+
+## Quick Summary
+
+- ⚡ **83× faster** collision screening (CUDA vs. pure Python)
+- 🔬 **Validated physics**: 4th-order RK4 integration with J2–J4 perturbations
+- 📊 **Multi-backend**: Automatic selection between CUDA, C++/OpenMP, NumPy, Python
+- 🌍 **Coordinate systems**: ECI, ECEF, LLA, Topocentric with proper transformations
+- 🎯 **Conjunction analysis**: Rapid all-pairs screening with TCA refinement
+- 📈 **Proven accuracy**: Energy conservation < 1e-7 over 24 hours
+
+---
+
+## 📊 Performance
+
+| Workload | Time (mean ± σ) | Speedup |
+|----------|-----------------|---------|
+| 1 satellite, 50k steps (Python) | 395 ± 8 ms | — |
+| 1 satellite, 50k steps (C++) | 21.9 ± 1.2 ms | **18×** |
+| 1,000 satellites, 24h @ dt=10s (Python) | 7,034 ± 145 ms | — |
+| 1,000 satellites, 24h @ dt=10s (C++) | 13.9 ± 0.8 ms | **507×** |
+| 1,000 satellites, 24h @ dt=10s (CUDA) | 46.9 ± 2.1 ms | **150×** |
+| Collision screening, 400×400 pairs (Python) | 46.7 ± 0.9 s | — |
+| Collision screening, 400×400 pairs (C++) | 5.2 ± 0.3 s | **9×** |
+| Collision screening, 400×400 pairs (CUDA) | 564 ± 18 ms | **83×** |
+
+**Hardware:** NVIDIA RTX 2050 (16 SMs); AMD Ryzen 5 (6-core); CUDA 12.9; GCC -O3 -march=native
+
+**Full methodology:** [docs/performance.md](docs/performance.md)
+
+---
+
+## 🏗 Architecture
 
 ```
-Astrosis/
-├── engine/               # Core Engine Package
-│   ├── physics/          # Physics & Mathematical logic
-│   │   ├── propagator.py # Numerical integrators
-│   │   ├── conjunction.py# Collision detection
-│   │   ├── maneuver.py   # Burn planning
-│   │   ├── fuel.py       # Propellant tracking
-│   │   └── accelerator.py# C++ Bridge & Fallback routing
-│   ├── frames.py         # Coordinate conversions
-│   ├── visibility.py     # Optical visibility & eclipse
-│   ├── data.py           # TLE ingestion & caching
-│   ├── simulation.py     # State management
-│   ├── analysis.py       # High-level reporting
-│   └── cli.py            # Command-line interface
-├── cpp/                  # Optional C++ High-Performance Source
-├── main.py               # Package Entry Point
-└── requirements.txt
+┌─ User API (Python / REST / CLI)
+│
+├─ Core Simulation Engine
+│  ├─ Physics: Propagation, Maneuver, Conjunction, Fuel
+│  ├─ Geodesy: Coordinate transforms, Time systems
+│  └─ I/O: TLE/OEM parsing, Catalog interface
+│
+└─ Backends (Auto-selected based on scale)
+   ├─ CUDA (GPU): Best for 500+ satellites
+   ├─ C++/OpenMP (CPU): Low latency, <500 sats
+   ├─ NumPy: Vectorized CPU operations
+   └─ Pure Python: Portable fallback
 ```
 
-## Getting Started
+**Backend Selection Logic:**
+
+- **< 500 satellites**: CPU (lower launch overhead)
+- **500–2,000 satellites**: GPU + CPU competitive
+- **> 2,000 satellites**: GPU strongly preferred
+
+For details: [docs/architecture.md](docs/architecture.md)
+
+---
+
+## 🔬 Physics & Validation
+
+### Integration Method: Fixed-Step RK4
+
+**Why fixed timesteps?**
+- GPU-friendly: no warp divergence
+- Predictable memory usage
+- Excellent for batching thousands of satellites
+- Proven 4th-order accuracy (O(dt⁴))
+
+**Integration parameters:**
+- Default timestep: dt = 10 seconds
+- Convergence: Exactly 4th-order (16× error reduction per dt halving)
+- Energy conservation: < 1e-7 relative drift over 24h
+
+**Limitations:**
+- Not symplectic; long-term (>30 days) energy drift emerges
+- Fixed timesteps suboptimal for highly eccentric orbits (e > 0.95)
+- Adaptive integration not supported (would break GPU parallelism)
+
+### Force Model
+
+| Force | Model | Notes |
+|-------|-------|-------|
+| Gravity | J2, J3, J4 harmonics (EGM96) | Higher harmonics negligible for operational SSA |
+| Drag | US Standard Atmosphere 1976 | F10.7-dependent; simplified vs. NRLMSISE-00 |
+| SRP | Cannonball model with eclipse | Accurate for < 0.1 AU |
+| Third-body | Sun + Moon (low-precision) | Adequate for LEO/MEO; GEO requires JPL ephemerides |
+
+### Validation Results
+
+✅ **Energy conservation**: < 1e-7 over 24h (proves numerical stability)
+✅ **Orbital precession**: J2 nodal regression accurate to < 0.03°/day
+✅ **Convergence**: Exactly 4th-order in timestep
+✅ **SRP modeling**: 50× correct ratio for low-mass vs. high-mass satellites
+
+**ISS validation (position error vs. SGP4):**
+- 6 hours: 3.2 km
+- 12 hours: 5.8 km
+- 24 hours: 9.8 km
+
+*Note:* This is not validation against "truth" — both RK4 and SGP4 approximate. The test validates that perturbation modeling behaves consistently.
+
+**Full validation suite:** [docs/validation.md](docs/validation.md)
+
+---
+
+## 🛠 Quick Start
 
 ### Prerequisites
+```bash
+Python 3.10+
+pip install -r requirements.txt
 
-- Python 3.10+
-- (Optional) CMake 3.15+ for C++ accelerator
-- (Optional) C++ compiler with C++17 support
+# Optional (highly recommended):
+CUDA 12.x + CMake 3.15+
+```
 
-### Installation
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. (Optional) Build the C++ accelerator:
-   ```bash
-   mkdir -p cpp/build && cd cpp/build
-   cmake .. && make
-   ```
-
-## Usage
-
-### Command Line Interface
-
-Astrosis provides a comprehensive CLI for satellite analysis:
+### Installation & First Run
 
 ```bash
-# Fetch TLE data from CelesTrak
-python main.py fetch
+# 1. Clone
+git clone https://github.com/your-org/astrosis.git && cd astrosis
 
-# Fetch specific satellite TLE
-python main.py fetch --id 25544
+# 2. Install Python
+pip install -r requirements.txt
 
-# Force refresh from remote
-python main.py fetch --force
+# 3. Build C++/CUDA backends (optional but ~500× faster)
+cd cpp && mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_CUDA=ON
+make -j$(nproc)
+cd ../..
 
-# Predict satellite passes for a ground station
-python main.py passes --id 25544 --lat 51.5 --lon -0.1 --hours 12
+# 4. Test propagation
+python main.py fetch --id 25544  # Fetch ISS TLE
+python main.py passes --id 25544 --lat 40.7 --lon -74.0  # NYC passes
 
-# With physical parameters for drag modeling
-python main.py passes --id 25544 --lat 28.5 --lon -80.6 --alt 0.05 \
-  --hours 24 --area 15.0 --mass 420000 --cd 2.2 --output passes.json
-
-# Run propagation simulation
-python main.py run --steps 1000 --dt 60.0
+# 5. Launch visualization
+python frontend/main.py  # Opens browser
 ```
 
-### CLI Options
-
-**`fetch` command:**
-- `--id`: Specific NORAD ID to fetch
-- `--force`: Force refresh from CelesTrak bypassing cache
-
-**`passes` command:**
-- `--id`: NORAD ID of satellite (required)
-- `--lat`: Ground station latitude in degrees (required)
-- `--lon`: Ground station longitude in degrees (required)
-- `--alt`: Ground station altitude in km (default: 0)
-- `--hours`: Hours to simulate (default: 24)
-- `--area`: Satellite cross-section area in m² (default: 10)
-- `--mass`: Satellite mass in kg (default: 1000)
-- `--cd`: Drag coefficient (default: 2.2)
-- `--output`: Output JSON file for results
-
-## Python API
-
-Use the engine as a library:
+### Python API Example
 
 ```python
-from engine import SimulationContext
-from engine.data import tle_ingestor
-from engine.analysis import report_passes
-from datetime import datetime, timezone
+from engine.simulation import SimulationContext
 
-# Fetch TLE data
-satellites = tle_ingestor.get_satellites()
+sim = SimulationContext()
 
-# Predict passes
-result = report_passes(
-    norad_id=25544,
-    lat=51.5074,  # London
-    lon=-0.1278,
-    alt=0.0,
-    start_dt=datetime.now(timezone.utc).replace(tzinfo=None),
-    hours=24
-)
+# Load satellite
+sat = sim.load_tle("25544")  # ISS
 
-for p in result['passes']:
-    print(f"Pass at {p['max_elevation_time']} - Max elevation: {p['elevation_max']:.1f}°")
+# Propagate 24 hours at 60-second intervals
+trajectory = sim.propagate(sat, hours=24, dt_seconds=60)
+
+# Find conjunctions
+conjunctions = sim.conjunction_assessment([sat1, sat2, sat3])
+
+# Plan maneuver
+maneuver = sim.plan_hohmann_transfer(sat, target_sma_km=42164)
 ```
 
-## Performance Benchmarks
+### Command-Line Examples
 
-See `benchmark_results.md` for detailed performance comparisons:
+```bash
+# Propagate constellation
+python main.py run --steps 86400 --dt 10
 
-| Operation | Python | C++ (speedup) |
-|-----------|--------|---------------|
-| Single propagation (5,000 iters) | 35.8 ms | 2.7 ms (×13.4) |
-| Batch (200 sats × 100 steps) | 147.5 ms | 1.8 ms (×83.7) |
-| Conjunction (100×100 pairs, 2h) | 518.1 ms | 37.4 ms (×13.9) |
+# Predict passes
+python main.py passes --id 44713 --lat 51.5 --lon -0.1
 
-## Architecture Details
+# Batch conjunction screening
+python main.py conjunction --catalog data/tle.txt --output risks.csv
+```
 
-- **RK4 Integration**: Fourth-order Runge-Kutta numerical propagation
-- **J2 Perturbation**: Earth's oblateness modeling for accurate orbits
-- **US Standard Atmosphere 1976**: Atmospheric density model for drag
-- **Conical Shadow Model**: Precise Earth eclipse calculations
+---
 
-## License
+## 📚 Documentation
 
-Proprietary / Research Use Only.
+| Resource | Purpose |
+|----------|---------|
+| [docs/architecture.md](docs/architecture.md) | System design, backends, API stability, extensibility |
+| [docs/performance.md](docs/performance.md) | Benchmarks, scaling, memory layout, kernel occupancy |
+| [docs/profiling.md](docs/profiling.md) | CUDA profiling, roofline analysis, performance optimization |
+| [docs/validation.md](docs/validation.md) | Physics verification, test cases, validation methodology, references |
+| [DESIGN.md](DESIGN.md) | Design tradeoffs (RK4 vs. adaptive, J2–J4 vs. full EGM2008, etc.) |
+
+---
+
+## 🔍 Key Design Decisions
+
+### Why RK4 and not adaptive stepping?
+Fixed timesteps are GPU-efficient (no warp divergence) and ideal for batching. Adaptive methods better for single satellites; RK4 wins for constellations.
+
+### Why J2–J4 and not full EGM2008?
+EGM2008 has 4.8 million coefficients; impractical for real-time. J2–J4 captures 99% of perturbation for operational SSA.
+
+### Why chan's method for Pc and not Foster/Patera?
+Chan is fast and reasonable for screening. Full covariance-based Pc requires orbital determination (not implemented). **Current Pc model is experimental.**
+
+### Precision: Why FP64 everywhere?
+Orbital state spans 13 orders of magnitude (position ~1 m, velocity ~7 km/s). FP32 insufficient for 24-hour integration. Energy conservation tests confirm FP64 necessity.
+
+---
+
+## 🎯 Use Cases
+
+- **Satellite operators**: Rapid conjunction assessment, maneuver planning
+- **Researchers**: Perturbation analysis, debris dynamics, constellation design
+- **Educators**: Interactive orbital mechanics learning
+- **Developers**: Building custom SSA applications via Python API
+
+---
+
+## 🧪 Testing & Reproducibility
+
+```bash
+# Unit tests
+python -m pytest tests/
+
+# Physics validation (analytical baselines)
+python validation/validate_physics.py --test energy --hours 24
+python validation/sgp4_vs_rk4.py --id 25544
+
+# Performance regression
+python benchmarks/benchmark.py --repeat 100
+
+# Monte Carlo ensemble
+python validation/test_monte_carlo.py --cases 100 --hours 72
+```
+
+---
+
+## 📝 API Stability
+
+**Current Status: EXPERIMENTAL**
+
+The API is subject to change before v1.0:
+- Core propagation / conjunction: Stable
+- Maneuver planning: May extend with constraints/optimization
+- REST endpoints: May change paths/parameters
+- Data formats: May add compression/streaming
+
+See [docs/architecture.md](docs/architecture.md#api-stability--versioning) for versioning plan.
+
+---
+
+## 🤝 Contributing
+
+Areas of interest:
+- Physics models (higher-order harmonics, improved drag)
+- Numerical methods (symplectic integrators, adaptive stepping)
+- Backends (Vulkan, HIP, SYCL)
+- Applications (debris tracking, launch windows, re-entry analysis)
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and standards.
+
+---
+
+## 📄 License
+
+MIT License. Free for academic, research, and commercial use.
+
+---
+
+## 🙏 References & Acknowledgments
+
+**Data & Standards:**
+- CelesTrak (TLE data)
+- Space-Track.org (NORAD catalog)
+- NASA GSFC (ephemeris, force model guidance)
+- ESA (CDM standards)
+
+**Physics References:**
+- Vallado, Crawford, Hujsak, Kelso (2006): "Revisiting Spacetrack Report #3"
+- U.S. Standard Atmosphere (1976)
+- EGM96 Gravity Model
+- Montenbruck & Eberhard (2000): Satellite Orbits
+
+**Tools:**
+- Skyfield (astronomical calculations)
+- Three.js (visualization)
+- FastAPI (REST framework)
+
+---
+
+**Astrosis** — High-performance orbital analysis for research and education.
+
+*Developed for conjunction assessment, constellation design, and orbital mechanics research.*

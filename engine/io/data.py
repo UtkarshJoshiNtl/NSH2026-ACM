@@ -11,11 +11,14 @@ import logging
 import os
 import json
 
+import pathlib
+
 logger = logging.getLogger("Astrosis-TLE")
 
-# Cache dir is now .cache in the package root
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-LOCAL_CACHE_DIR = os.path.join(ROOT_DIR, ".cache", "tle")
+# XDG-style cache: ~/.cache/astrosis/tle/
+# This path is stable whether the engine is run from source, installed via pip,
+# or used inside a virtualenv — unlike package-relative paths which break on install.
+LOCAL_CACHE_DIR = str(pathlib.Path.home() / ".cache" / "astrosis" / "tle")
 CELESTRAK_API_URL = "https://celestrak.org/NORAD/elements/gp.php"
 
 # TLE epoch year cutoff: years < 57 are 2000+, years >= 57 are 1900+

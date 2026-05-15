@@ -22,23 +22,23 @@ inline void cuda_print_device_info() {}
 #endif
 
 // ── Batch Propagation ─────────────────────────────────────────────────────────
-// Propagates N satellites for `steps` RK4 steps of size `dt_s` seconds.
-// `states_inout` is a flat array of N*6 doubles [x,y,z,vx,vy,vz] per satellite,
-// modified in-place.
 #ifdef USE_CUDA
-void cuda_propagate_batch(
-    double* states_inout, int n,
-    double dt_s, int steps);
+void cuda_propagate_batch(double* states_inout, int n, double dt_seconds, int steps, double mjd0);
 
-void cuda_propagate_batch_drag(
-    double* states_inout, int n,
-    double dt_s, int steps,
-    double area, double mass, double cd);
+void cuda_propagate_batch_drag(double* states_inout, int n, double dt_seconds, int steps,
+                               double area, double mass, double cd, double cr, double mjd0);
 
-void cuda_propagate_full_history(
-    const double* initial_states, int n,
-    double dt_s, int steps,
-    double* output_history);
+void cuda_propagate_batch_soa(double* states_inout, int n, double dt_seconds, int steps,
+                               double area, double mass, double cd, double cr, bool with_drag,
+                               double mjd0);
+
+void cuda_propagate_batch_streamed(double* states_inout, int n, double dt_seconds, int steps, double mjd0);
+
+void cuda_propagate_full_history(const double* initial_states, int n,
+                                 double dt_seconds, int steps, 
+                                 double area, double mass, double cd, double cr, bool with_drag,
+                                 double mjd0,
+                                 double* output_history);
 #endif
 
 // ── Conjunction Detection ─────────────────────────────────────────────────────
@@ -48,6 +48,10 @@ void cuda_propagate_full_history(
 std::vector<ConjunctionWarning> cuda_detect_conjunctions(
     const double* sat_states, int ns,
     const double* debris_states, int nd,
-    double lookahead_s,
-    double step_s);
+    double lookahead_s, double step_s, double mjd0);
+
+double cuda_monte_carlo_pc(
+    const double* sat_samples, 
+    const double* deb_samples,
+    int n, double dt, int steps, double threshold_km, double mjd0);
 #endif

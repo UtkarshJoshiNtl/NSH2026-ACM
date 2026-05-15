@@ -68,7 +68,11 @@ endif()
 if(MSVC)
     target_compile_options(physics_engine PRIVATE /O2 /fp:fast)
 else()
-    target_compile_options(physics_engine PRIVATE -O3 -march=native -ffast-math)
+    target_compile_options(physics_engine PRIVATE
+        -O3 -march=native -ffast-math
+        -fno-omit-frame-pointer          # needed by perf/gprof profilers
+        -fopt-info-vec                   # report auto-vectorised loops to stdout at build time
+    )
     if(HAS_CUDA)
         target_compile_options(physics_engine PRIVATE
             $<$<COMPILE_LANGUAGE:CUDA>:-O3 --use_fast_math -lineinfo>

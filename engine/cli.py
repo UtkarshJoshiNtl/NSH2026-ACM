@@ -9,9 +9,9 @@ import logging
 import json
 from datetime import datetime, timezone
 
-from .data import tle_ingestor
+from .io.data import tle_ingestor
 from .simulation import SimulationContext
-from .analysis import report_passes
+from .geo.analysis import report_passes
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("Astrosis")

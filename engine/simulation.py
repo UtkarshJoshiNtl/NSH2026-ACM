@@ -4,8 +4,8 @@ astrosis/simulation.py — Local Ephemeral Simulation Context
 Defines the local state objects for running single instances of the analysis engine.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, List
 from .constants import INITIAL_FUEL, DRY_MASS
 
 @dataclass
@@ -26,6 +26,7 @@ class ScheduledBurn:
     burn_time: float
     delta_v: List[float]
     executed: bool = False
+
 
 class SimulationContext:
     """
@@ -67,7 +68,7 @@ class SimulationContext:
             self.objects[obj.id] = obj
 
     def advance_time(self, dt_seconds: float) -> None:
-        from .physics.accelerator import propagate_batch
+        from .core.accelerator import propagate_batch
         
         sats = self.get_all_satellites()
         if not sats:

@@ -7,7 +7,7 @@ and overall satellite visibility conditions based on observer topology.
 
 import numpy as np
 from datetime import datetime
-from .constants import RE, RS_SUN, AU
+from ..constants import RE, RS_SUN, AU
 
 def sun_position_eci(dt: datetime) -> np.ndarray:
     """

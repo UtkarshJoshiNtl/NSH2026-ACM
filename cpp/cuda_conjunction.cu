@@ -32,12 +32,13 @@ struct GpuWarning {
 };
 
 // ── Temporal sweep for all pairs ────────────────────────────
-__global__ void k_narrow(const double* __restrict__ sats, int ns,
-                          const double* __restrict__ debs, int nd,
-                          GpuWarning* __restrict__ out,
-                          int* __restrict__ out_count,
-                          int max_out,
-                          double lookahead, double step_s) {
+__global__ void k_narrow(
+    const double* __restrict__ sats, int ns,
+    const double* __restrict__ debs, int nd,
+    GpuWarning* __restrict__ out,
+    int* __restrict__ out_count,
+    int max_out,
+    double lookahead, double step_s, double mjd0) {
     int si = blockIdx.x * blockDim.x + threadIdx.x;
     int di = blockIdx.y * blockDim.y + threadIdx.y;
     if (si >= ns || di >= nd) return;
@@ -60,8 +61,8 @@ __global__ void k_narrow(const double* __restrict__ sats, int ns,
             tca = st * step_s;
             rv_x = svx - dvx; rv_y = svy - dvy; rv_z = svz - dvz;
         }
-        rk4_step_device(sx, sy, sz, svx, svy, svz, step_s, false, 0, 1, 0);
-        rk4_step_device(dx, dy, dz, dvx, dvy, dvz, step_s, false, 0, 1, 0);
+        rk4_step_device(sx, sy, sz, svx, svy, svz, step_s, false, 0, 1, 0, 1.5, mjd0, st);
+        rk4_step_device(dx, dy, dz, dvx, dvy, dvz, step_s, false, 0, 1, 0, 1.5, mjd0, st);
     }
 
     int sev = 0;
@@ -81,7 +82,7 @@ __global__ void k_narrow(const double* __restrict__ sats, int ns,
 std::vector<ConjunctionWarning> cuda_detect_conjunctions(
         const double* sat_states, int ns,
         const double* debris_states, int nd,
-        double lookahead_s, double step_s) {
+        double lookahead_s, double step_s, double mjd0) {
 
     if (ns == 0 || nd == 0) return {};
 
@@ -101,7 +102,7 @@ std::vector<ConjunctionWarning> cuda_detect_conjunctions(
     dim3 blk(16, 16), grd((ns+15)/16, (nd+15)/16);
 
     // Narrow phase for all pairs
-    k_narrow<<<grd, blk>>>(ds, ns, dd, nd, gout, cnt, max_out, lookahead_s, step_s);
+    k_narrow<<<grd, blk>>>(ds, ns, dd, nd, gout, cnt, max_out, lookahead_s, step_s, mjd0);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
