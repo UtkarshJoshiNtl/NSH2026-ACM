@@ -2,13 +2,9 @@
 
 > **Why we built it this way.** Every significant decision in Astrosis was made deliberately. This document explains the *why* behind the *what*, providing insight into the engineering tradeoffs that enable high-performance orbital simulation.
 
-**Quick Context:** Astrosis simulates satellite motion with research-grade accuracy while maintaining real-time performance for constellation-scale analysis (10,000+ satellites). The core challenge: balance numerical precision with computational efficiency across CPU and GPU architectures.
+**Quick Context:** Astrosis simulates satellite motion with engineering-grade accuracy while maintaining real-time performance for constellation-scale analysis (10,000+ satellites). The core challenge: balance numerical precision with computational efficiency across CPU and GPU architectures.
 
 ---
-
-## 1. Why RK4 and not an adaptive step-size integrator (RK45 / Dormand-Prince)?
-
-**Short answer:** Fixed step sizes are GPU-friendly, SIMD-vectorizable, and produce predictable memory usage. Adaptive methods offer better accuracy per CPU cycle for a single satellite; fixed methods win decisively for batches of thousands.
 
 ## 1. Why RK4 and not an adaptive step-size integrator (RK45 / Dormand-Prince)?
 
@@ -167,7 +163,7 @@ Position uncertainty is estimated from TLE age: `σ ≈ 0.3 × sqrt(TLE_age_days
 
 ## Summary: The Astrosis Philosophy
 
-**Performance through precision, not compromise.** Astrosis demonstrates that research-grade orbital simulation doesn't require sacrificing speed. By carefully engineering every layer — from numerical methods to memory layouts — we achieve:
+**Performance through precision, not compromise.** Astrosis demonstrates that high-performance orbital simulation doesn't require sacrificing accuracy. By carefully engineering every layer — from numerical methods to memory layouts — we achieve:
 
 - **83x speedup** on collision detection vs. naive implementations
 - **< 1e-7 energy conservation** over 24 hours
