@@ -1,9 +1,14 @@
 # Astrosis Engine — Design Decisions
 
-> Every significant decision in this engine was made deliberately.
-> This document explains *why*, not just *what*.
+> **Why we built it this way.** Every significant decision in Astrosis was made deliberately. This document explains the *why* behind the *what*, providing insight into the engineering tradeoffs that enable high-performance orbital simulation.
+
+**Quick Context:** Astrosis simulates satellite motion with research-grade accuracy while maintaining real-time performance for constellation-scale analysis (10,000+ satellites). The core challenge: balance numerical precision with computational efficiency across CPU and GPU architectures.
 
 ---
+
+## 1. Why RK4 and not an adaptive step-size integrator (RK45 / Dormand-Prince)?
+
+**Short answer:** Fixed step sizes are GPU-friendly, SIMD-vectorizable, and produce predictable memory usage. Adaptive methods offer better accuracy per CPU cycle for a single satellite; fixed methods win decisively for batches of thousands.
 
 ## 1. Why RK4 and not an adaptive step-size integrator (RK45 / Dormand-Prince)?
 
@@ -157,3 +162,29 @@ where:
 This is valid for the dilute encounter regime (miss_distance >> σ), which covers the vast majority of CDM events. For miss_distance < σ (ultra-close approaches), a numerical integration of the 2D Gaussian is required — this is the Foster/Patera refinement not currently implemented.
 
 Position uncertainty is estimated from TLE age: `σ ≈ 0.3 × sqrt(TLE_age_days)` km. This is the Vallado (2013) empirical model for LEO.
+
+---
+
+## Summary: The Astrosis Philosophy
+
+**Performance through precision, not compromise.** Astrosis demonstrates that research-grade orbital simulation doesn't require sacrificing speed. By carefully engineering every layer — from numerical methods to memory layouts — we achieve:
+
+- **83x speedup** on collision detection vs. naive implementations
+- **< 1e-7 energy conservation** over 24 hours
+- **Real-time constellation analysis** on consumer hardware
+
+**Key Principles:**
+1. **Hardware-aware design**: Optimize for GPU/CPU strengths, not mathematical purity
+2. **Validation-driven development**: Every optimization proven against analytical solutions
+3. **Scalable architecture**: Same code runs on laptops and supercomputers
+4. **Open science**: All methods, benchmarks, and validation are reproducible
+
+**For researchers:** The [validation/](validation/) directory contains all verification code. Reproduce our results or extend the physics models.
+
+**For operators:** The [engine/](engine/) provides a stable API for integration into operational systems.
+
+**For contributors:** See [README.md](README.md) for development setup and contribution guidelines.
+
+---
+
+*This document evolves with the codebase. Design decisions are revisited as hardware and requirements change.*
