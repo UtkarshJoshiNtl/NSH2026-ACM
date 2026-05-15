@@ -144,22 +144,44 @@ class ConjunctionDetector:
         # 1. Broad Phase: initial-position KDTree cull
         # We cannot rely on t=0 distance alone (pairs may converge), but it
         # eliminates pairs on opposite sides of Earth (> 12,000 km apart).
-        from scipy.spatial import KDTree
         sat_pos = [s[:3] for s in sat_states]
         deb_pos = [d[:3] for d in debris_states]
-        tree = KDTree(deb_pos)
         # Conservative radius: LEO relative velocity ~15 km/s × lookahead; cap at Earth diameter
         broad_radius = min(15.0 * lookahead_s, 12742.0)
-        candidates = tree.query_ball_point(sat_pos, r=broad_radius)
+        try:
+            from scipy.spatial import KDTree
+            tree = KDTree(deb_pos)
+            candidates = tree.query_ball_point(sat_pos, r=broad_radius)
+        except ImportError:
+            broad_radius2 = broad_radius * broad_radius
+            candidates = []
+            for s_pos in sat_pos:
+                candidate_list = []
+                for deb_idx, d_pos in enumerate(deb_pos):
+                    dx = s_pos[0] - d_pos[0]
+                    dy = s_pos[1] - d_pos[1]
+                    dz = s_pos[2] - d_pos[2]
+                    if dx*dx + dy*dy + dz*dz <= broad_radius2:
+                        candidate_list.append(deb_idx)
+                candidates.append(candidate_list)
 
         # 2. Pre-propagate all satellites and debris (batch RK4)
         n_steps = int(lookahead_s / step_s)
+        remainder_s = lookahead_s - n_steps * step_s
+        sample_times = [step * step_s for step in range(n_steps + 1)]
 
         # Lazy import from accelerator to avoid module-level circular dependency
         from .accelerator import propagate_batch_full_history
         # Pass mjd0 to ensure history matches high-fidelity requirements if mjd0 > 0
         all_sats = propagate_batch_full_history(sat_states, step_s, n_steps, mjd0=mjd0)
         all_debs = propagate_batch_full_history(debris_states, step_s, n_steps, mjd0=mjd0)
+        if remainder_s > 1e-9:
+            remainder_mjd = mjd0 + (n_steps * step_s) / 86400.0 if mjd0 > 0 else 0.0
+            sat_tail = propagate_batch_numpy(all_sats[-1].tolist(), remainder_s, 1, mjd0=remainder_mjd)
+            deb_tail = propagate_batch_numpy(all_debs[-1].tolist(), remainder_s, 1, mjd0=remainder_mjd)
+            all_sats = np.concatenate((all_sats, np.array([sat_tail], dtype=np.float64)), axis=0)
+            all_debs = np.concatenate((all_debs, np.array([deb_tail], dtype=np.float64)), axis=0)
+            sample_times.append(lookahead_s)
 
         # 3. TCA covariance: empirical 1-sigma grows with TLE age
         sigma_pos = 0.3 * math.sqrt(max(tle_age_days, 0.1))
@@ -171,14 +193,14 @@ class ConjunctionDetector:
                 tca_coarse = 0.0
                 rel_v_at_tca = [0.0, 0.0, 0.0]
 
-                for step in range(n_steps + 1):
+                for step, sample_t in enumerate(sample_times):
                     s = all_sats[step][sat_idx]
                     d = all_debs[step][deb_idx]
                     dx = s[0] - d[0]; dy = s[1] - d[1]; dz = s[2] - d[2]
                     dist = math.sqrt(dx*dx + dy*dy + dz*dz)
                     if dist < min_dist:
                         min_dist = dist
-                        tca_coarse = step * step_s
+                        tca_coarse = sample_t
                         rel_v_at_tca = [s[3]-d[3], s[4]-d[4], s[5]-d[5]]
 
                 # Quick cull — only refine if under ADVISORY threshold

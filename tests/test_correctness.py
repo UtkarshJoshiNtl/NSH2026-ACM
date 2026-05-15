@@ -13,6 +13,9 @@ Run:
 """
 
 import math
+import subprocess
+import sys
+import types
 import pytest
 import numpy as np
 
@@ -200,6 +203,67 @@ def test_conjunction_tca_accuracy():
     )
 
 
+def test_python_conjunction_scans_partial_final_window(monkeypatch):
+    """
+    The Python detector must scan the partial final interval when lookahead_s is
+    not an exact multiple of step_s.
+    """
+    from engine.core import conjunction as conjunction_mod
+
+    def linear_history(states, dt_seconds, steps, **_kwargs):
+        history = []
+        for step in range(steps + 1):
+            t = step * dt_seconds
+            rows = []
+            for state in states:
+                rows.append([
+                    state[0] + state[3] * t,
+                    state[1] + state[4] * t,
+                    state[2] + state[5] * t,
+                    state[3],
+                    state[4],
+                    state[5],
+                ])
+            history.append(rows)
+        return np.array(history, dtype=np.float64)
+
+    def linear_batch(states, dt_seconds, steps, **_kwargs):
+        t = dt_seconds * steps
+        return [
+            [
+                state[0] + state[3] * t,
+                state[1] + state[4] * t,
+                state[2] + state[5] * t,
+                state[3],
+                state[4],
+                state[5],
+            ]
+            for state in states
+        ]
+
+    def linear_step(state, dt_seconds, **_kwargs):
+        return (
+            state[0] + state[3] * dt_seconds,
+            state[1] + state[4] * dt_seconds,
+            state[2] + state[5] * dt_seconds,
+            state[3],
+            state[4],
+            state[5],
+        )
+
+    import engine.core.accelerator as accelerator_mod
+    monkeypatch.setattr(accelerator_mod, "propagate_batch_full_history", linear_history)
+    monkeypatch.setattr(conjunction_mod, "propagate_batch_numpy", linear_batch)
+    monkeypatch.setattr(conjunction_mod, "rk4_step", linear_step)
+
+    sat = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    deb = [11.0, 0.0, 0.0, -0.1, 0.0, 0.0]
+    warns = conjunction_mod.ConjunctionDetector().detect([sat], [deb], lookahead_s=65.0, step_s=60.0)
+
+    assert warns, "Expected advisory warning in the partial final interval"
+    assert warns[0].time_to_closest_approach > 60.0
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Fuel — non-default initial load
 # ─────────────────────────────────────────────────────────────────────────────
@@ -304,3 +368,62 @@ def test_propagate_returns_six_elements():
     assert len(result) == 6
     for v in result:
         assert math.isfinite(v), f"Non-finite value in propagated state: {result}"
+
+
+def test_engine_core_import_is_lazy():
+    code = (
+        "import sys\n"
+        "import engine.core\n"
+        "print('engine.core.accelerator' in sys.modules)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=".",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "False"
+
+
+def test_report_passes_converts_teme_initial_state(monkeypatch):
+    from engine.geo import analysis
+
+    calls = []
+
+    def fake_teme_to_eci(r_teme, v_teme, dt):
+        calls.append((r_teme, v_teme, dt))
+        return np.array([1.0, 2.0, 3.0]), np.array([0.1, 0.2, 0.3])
+
+    class FakeSatrec:
+        @classmethod
+        def twoline2rv(cls, _line1, _line2):
+            return cls()
+
+        def sgp4(self, _jd, _jdfrac):
+            return 0, [7000.0, 0.0, 0.0], [0.0, 7.5, 0.0]
+
+    fake_sgp4 = types.ModuleType("sgp4")
+    fake_api = types.ModuleType("sgp4.api")
+    fake_api.Satrec = FakeSatrec
+    fake_api.jday = lambda *_args: (2451545.0, 0.0)
+
+    class FakeIngestor:
+        def get_satellites(self, **_kwargs):
+            return [{
+                "satellite_name": "TESTSAT",
+                "line1": "1 00000U 00000A   25001.00000000  .00000000  00000+0  00000+0 0  0000",
+                "line2": "2 00000   0.0000   0.0000 0000000   0.0000   0.0000  1.00000000    00",
+            }]
+
+    monkeypatch.setitem(sys.modules, "sgp4", fake_sgp4)
+    monkeypatch.setitem(sys.modules, "sgp4.api", fake_api)
+    monkeypatch.setattr(analysis, "_teme_to_eci", fake_teme_to_eci)
+
+    result = analysis.report_passes(
+        0, 0.0, 0.0, 0.0, start_dt=__import__("datetime").datetime(2025, 1, 1),
+        hours=0.0, ingestor=FakeIngestor()
+    )
+
+    assert result["satellite"] == "TESTSAT"
+    assert len(calls) == 1

@@ -196,7 +196,7 @@ def weak_scaling():
     ax.axhline(1.0, color=RED, ls="--", lw=1.2, label="Perfect efficiency")
     ax.set_ylim(0, 1.2)
     ax.set_xlabel("OMP_NUM_THREADS")
-    ax.set_ylabel("Parallel efficiency  η = T₁/(T·Tₙ)")
+    ax.set_ylabel("Parallel efficiency  eta = T1/Tn")
     ax.set_title(f"Weak Scaling — N = {N_per_thread:,} × threads")
     ax.legend(); ax.grid(True)
     fig.tight_layout()

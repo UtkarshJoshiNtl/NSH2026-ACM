@@ -144,9 +144,8 @@ def report_passes(
     if err != 0:
         return {"error": f"SGP4 propagation error (code {err})."}
 
-    # TEME is already an inertial frame, differing from ECI/GCRF only by the
-    # equation of the equinoxes (< 1 arcsecond). Use directly.
-    state = list(r_teme) + list(v_teme)
+    r_eci, v_eci = _teme_to_eci(np.array(r_teme), np.array(v_teme), start_dt)
+    state = list(r_eci) + list(v_eci)
 
     lat_rad = np.radians(lat)
     lon_rad = np.radians(lon)

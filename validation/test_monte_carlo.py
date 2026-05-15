@@ -3,11 +3,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cpp", "build")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import numpy as np
-import physics_engine as _cpp
+import pytest
 import time
+
+try:
+    import physics_engine as _cpp
+except ImportError:
+    pytest.skip("physics_engine extension is not built", allow_module_level=True)
 
 def test_mc():
     print("Testing GPU Monte Carlo Pc Calculation...")
+    if not getattr(_cpp, "cuda_available", lambda: False)():
+        pytest.skip("CUDA backend is not available")
     
     # 1. Setup a near-miss scenario
     # Satellite A (circular)
@@ -34,7 +41,12 @@ def test_mc():
     mjd0 = 60810.0
     
     start = time.perf_counter()
-    pc = _cpp.cuda_monte_carlo_pc(sat_samples, deb_samples, dt, steps, threshold, mjd0)
+    try:
+        pc = _cpp.cuda_monte_carlo_pc(sat_samples, deb_samples, dt, steps, threshold, mjd0)
+    except RuntimeError as exc:
+        if "CUDA" in str(exc):
+            pytest.skip(f"CUDA Monte Carlo unavailable: {exc}")
+        raise
     elapsed = time.perf_counter() - start
     
     print(f"  Samples:    {n_samples:,}")

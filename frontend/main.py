@@ -6,6 +6,8 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from engine.core.accelerator import propagate_batch
 
+FRONTEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = FastAPI()
 
 # In a real app, we'd have a constellation database
@@ -21,7 +23,7 @@ for i in range(500):
 
 @app.get("/", response_class=HTMLResponse)
 async def read_index():
-    with open("frontend/index.html") as f:
+    with open(os.path.join(FRONTEND_DIR, "index.html")) as f:
         return f.read()
 
 @app.get("/api/constellation")
