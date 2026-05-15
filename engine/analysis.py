@@ -34,6 +34,7 @@ def report_passes(
     sat_area: float = 10.0,
     sat_mass: float = 1000.0,
     sat_cd: float = 2.2,
+    ingestor=None,   # dependency injection — pass a TLEIngestor or mock; defaults to global singleton
 ):
     """
     Predict satellite passes for a ground station.
@@ -48,8 +49,11 @@ def report_passes(
         sat_area:  Satellite cross-sectional area in m² (drag, default 10 m²).
         sat_mass:  Satellite total mass in kg (drag, default 1000 kg).
         sat_cd:    Drag coefficient (default 2.2).
+        ingestor:  TLEIngestor instance (or mock). Defaults to module-level singleton.
     """
-    satellites = tle_ingestor.get_satellites(satellite_id=str(norad_id), force_refresh=False)
+    if ingestor is None:
+        ingestor = tle_ingestor
+    satellites = ingestor.get_satellites(satellite_id=str(norad_id), force_refresh=False)
     if not satellites:
         return {"error": "Satellite not found."}
 

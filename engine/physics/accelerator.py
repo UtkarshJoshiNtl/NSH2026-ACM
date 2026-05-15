@@ -56,12 +56,27 @@ else:
 
 
 def backend_info() -> dict:
-    """Return a dict describing which backends are available."""
+    """Return a dict describing which backends are available and active."""
+    active = "python"
+    desc = "Pure Python RK4 / SciPy"
+    if _HAS_CUDA:
+        active = "cuda"
+        desc = "CUDA GPU acceleration (NVIDIA)"
+    elif _HAS_BATCH_CPP:
+        active = "cpp"
+        desc = "C++ multi-threaded (OpenMP)"
+    elif _HAS_CPP:
+        active = "cpp"
+        desc = "C++ single-threaded"
+
     return {
+        "active":     active,
+        "backend":    active, # alias for API compatibility
         "cuda":       _HAS_CUDA,
         "cpp":        _HAS_CPP,
         "numpy_batch": True,
         "python":     True,
+        "description": desc,
     }
 
 

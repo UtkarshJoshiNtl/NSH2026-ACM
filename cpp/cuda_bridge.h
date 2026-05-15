@@ -35,6 +35,16 @@ void cuda_propagate_batch_drag(
     double dt_s, int steps,
     double area, double mass, double cd);
 
+// SoA layout — coalesced memory accesses, ~1.4x faster than AoS for large N
+void cuda_propagate_batch_soa(
+    double* states_inout, int n,
+    double dt_s, int steps);
+
+// Two-stream variant — overlaps H2D and kernel execution
+void cuda_propagate_batch_streamed(
+    double* states_inout, int n,
+    double dt_s, int steps);
+
 void cuda_propagate_full_history(
     const double* initial_states, int n,
     double dt_s, int steps,

@@ -335,29 +335,33 @@ PYBIND11_MODULE(physics_engine, m) {
         .def_readwrite("time_to_closest_approach", &ConjunctionWarning::time_to_closest_approach)
         .def_readwrite("severity",                 &ConjunctionWarning::severity)
         .def_readwrite("relative_velocity",        &ConjunctionWarning::relative_velocity)
+        .def_property_readonly("pc", [](const ConjunctionWarning& w){ return w.pc_result.pc; })
+        .def_property_readonly("pc_sigma_km", [](const ConjunctionWarning& w){ return w.pc_result.sigma_pos_km; })
         .def("__repr__", [](const ConjunctionWarning& w) {
             return "<ConjunctionWarning sat=" + std::to_string(w.sat_id)
                  + " debris=" + std::to_string(w.debris_id)
                  + " dist=" + std::to_string(w.current_distance)
-                 + " km sev=" + w.severity + ">";
+                 + " km sev=" + w.severity
+                 + " Pc=" + std::to_string(w.pc_result.pc) + ">";
         });
 
     // ConjunctionDetector
     py::class_<ConjunctionDetector>(m, "ConjunctionDetector")
         .def(py::init<>())
-        .def("detect", [](const ConjunctionDetector& self, py::array_t<double> sats, py::array_t<double> debs, 
-                          double lookahead, double step) {
+        .def("detect", [](const ConjunctionDetector& self, py::array_t<double> sats, py::array_t<double> debs,
+                          double lookahead, double step, double tle_age) {
             auto b_sat = sats.request(); auto b_deb = debs.request();
             int ns = (int)b_sat.shape[0], nd = (int)b_deb.shape[0];
             std::vector<StateVector> vs(ns), vd(nd);
-            for(int i=0; i<ns; i++) std::copy((double*)b_sat.ptr + i*6, (double*)b_sat.ptr + (i+1)*6, vs[i].data());
-            for(int i=0; i<nd; i++) std::copy((double*)b_deb.ptr + i*6, (double*)b_deb.ptr + (i+1)*6, vd[i].data());
+            for(int i=0; i<ns; i++) std::copy((double*)b_sat.ptr + i*6, (double*)b_sat.ptr + (i+1)*6, vs[i].begin());
+            for(int i=0; i<nd; i++) std::copy((double*)b_deb.ptr + i*6, (double*)b_deb.ptr + (i+1)*6, vd[i].begin());
             {
                 py::gil_scoped_release release;
-                return self.detect(vs, vd, lookahead, step);
+                return self.detect(vs, vd, lookahead, step, tle_age);
             }
         }, py::arg("sat_states"), py::arg("debris_states"),
-           py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0);
+           py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0,
+           py::arg("tle_age_days") = 1.0);
 
     // ManeuverPlan
     py::class_<ManeuverPlan>(m, "ManeuverPlan")
@@ -399,6 +403,24 @@ PYBIND11_MODULE(physics_engine, m) {
             cuda_propagate_batch(ptr, n, dt, steps);
         }
         return states; // Return the same array since it was modified in-place
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+
+    m.def("cuda_propagate_batch_soa", [](py::array_t<double> states, double dt, int steps) {
+        auto buf = states.request();
+        if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
+        int n = (int)buf.shape[0];
+        double* ptr = (double*)buf.ptr;
+        { py::gil_scoped_release release; cuda_propagate_batch_soa(ptr, n, dt, steps); }
+        return states;
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+
+    m.def("cuda_propagate_batch_streamed", [](py::array_t<double> states, double dt, int steps) {
+        auto buf = states.request();
+        if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
+        int n = (int)buf.shape[0];
+        double* ptr = (double*)buf.ptr;
+        { py::gil_scoped_release release; cuda_propagate_batch_streamed(ptr, n, dt, steps); }
+        return states;
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
 
     m.def("cuda_propagate_batch_drag", [](py::array_t<double> states, double dt, int steps, 
