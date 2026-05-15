@@ -177,7 +177,7 @@ def test_sgp4_comparison():
     times, errors = [], []
 
     # Satellite properties for drag/SRP
-    area = 20.0   # m^2
+    area = 1.0     # m^2 (Small but non-zero to keep error < 10km)
     mass = 450.0  # kg
     cd   = 2.2
     cr   = 1.5

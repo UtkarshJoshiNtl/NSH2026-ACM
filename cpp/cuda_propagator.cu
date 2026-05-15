@@ -76,7 +76,8 @@ __global__ void k_prop_aos_drag(double* __restrict__ S, int n, double dt, int st
 __global__ void k_prop_soa(double* __restrict__ X,  double* __restrict__ Y,
                              double* __restrict__ Z,  double* __restrict__ VX,
                              double* __restrict__ VY, double* __restrict__ VZ,
-                             int n, double dt, int steps, double mjd0){
+                             int n, double dt, int steps, 
+                             bool drag, double A, double m, double cd, double cr, double mjd0){
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if(i >= n) return;
 
@@ -84,7 +85,7 @@ __global__ void k_prop_soa(double* __restrict__ X,  double* __restrict__ Y,
     double vx = VX[i], vy = VY[i], vz = VZ[i];
 
     for(int s=0; s<steps; s++){
-        rk4_step_device(x, y, z, vx, vy, vz, dt, false, 0, 1, 0, 1.5, mjd0, s);
+        rk4_step_device(x, y, z, vx, vy, vz, dt, drag, A, m, cd, cr, mjd0, s);
     }
 
     X[i] = x; Y[i] = y; Z[i] = z;
@@ -94,7 +95,9 @@ __global__ void k_prop_soa(double* __restrict__ X,  double* __restrict__ Y,
 // ─────────────────────────────────────────────────────────────────────────────
 // Full History Kernel (AoS, unchanged from alpha)
 // ─────────────────────────────────────────────────────────────────────────────
-__global__ void k_history(const double* __restrict__ S0, int n, double dt, int steps, double mjd0, double* __restrict__ H){
+__global__ void k_history(const double* __restrict__ S0, int n, double dt, int steps, 
+                           bool drag, double A, double m, double cd, double cr, double mjd0, 
+                           double* __restrict__ H){
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if(i >= n) return;
 
@@ -106,7 +109,7 @@ __global__ void k_history(const double* __restrict__ S0, int n, double dt, int s
     H[0*(n*6) + i*6+3]=vx; H[0*(n*6) + i*6+4]=vy; H[0*(n*6) + i*6+5]=vz;
 
     for(int s=1; s<=steps; s++){
-        rk4_step_device(x, y, z, vx, vy, vz, dt, false, 0, 1, 0, 1.5, mjd0, s-1);
+        rk4_step_device(x, y, z, vx, vy, vz, dt, drag, A, m, cd, cr, mjd0, s-1);
         int out_idx = s*(n*6) + i*6;
         H[out_idx+0]=x; H[out_idx+1]=y; H[out_idx+2]=z;
         H[out_idx+3]=vx; H[out_idx+4]=vy; H[out_idx+5]=vz;
@@ -137,7 +140,8 @@ static void run_aos(double* s, int n, double dt, int steps,
 // SoA host launcher with pinned memory for H2D/D2H transfers
 // ─────────────────────────────────────────────────────────────────────────────
 // Returns time to completion in milliseconds.
-static void run_soa(double* s, int n, double dt, int steps, double mjd0){
+static void run_soa(double* s, int n, double dt, int steps,
+                    bool drag, double A, double m, double cd, double cr, double mjd0){
     size_t bytes_per_comp = (size_t)n * sizeof(double);
     size_t total_gpu_bytes = bytes_per_comp * 6;
     double *d_all;
@@ -163,7 +167,7 @@ static void run_soa(double* s, int n, double dt, int steps, double mjd0){
     CUDA_CHECK(cudaMemcpy(dX, hx, total_gpu_bytes, cudaMemcpyHostToDevice));
 
     int blk = 256, grd = (n+blk-1)/blk;
-    k_prop_soa<<<grd, blk>>>(dX, dY, dZ, dVX, dVY, dVZ, n, dt, steps, mjd0);
+    k_prop_soa<<<grd, blk>>>(dX, dY, dZ, dVX, dVY, dVZ, n, dt, steps, drag, A, m, cd, cr, mjd0);
 
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
@@ -323,14 +327,18 @@ void cuda_propagate_batch_drag(double* s, int n, double dt, int steps,
                                 double A, double m, double cd, double cr, double mjd0){
     run_aos(s,n,dt,steps,true,A,m,cd,cr,mjd0);
 }
-void cuda_propagate_batch_soa(double* s, int n, double dt, int steps, double mjd0){
-    run_soa(s,n,dt,steps,mjd0);
+void cuda_propagate_batch_soa(double* s, int n, double dt, int steps,
+                               double area, double mass, double cd, double cr, bool with_drag,
+                               double mjd0){
+    run_soa(s,n,dt,steps,with_drag,area,mass,cd,cr,mjd0);
 }
 void cuda_propagate_batch_streamed(double* s, int n, double dt, int steps, double mjd0){
     run_streamed(s,n,dt,steps,mjd0);
 }
 void cuda_propagate_full_history(const double* initial_states, int n,
-                                  double dt, int steps, double mjd0, double* output_history){
+                                  double dt, int steps, 
+                                  double area, double mass, double cd, double cr, bool with_drag,
+                                  double mjd0, double* output_history){
     size_t in_bytes  = (size_t)n*6*sizeof(double);
     size_t out_bytes = (size_t)(steps+1)*n*6*sizeof(double);
     double *din, *dout;
@@ -338,7 +346,7 @@ void cuda_propagate_full_history(const double* initial_states, int n,
     CUDA_CHECK(cudaMalloc(&dout, out_bytes));
     CUDA_CHECK(cudaMemcpy(din, initial_states, in_bytes, cudaMemcpyHostToDevice));
     int blk=256, grd=(n+blk-1)/blk;
-    k_history<<<grd,blk>>>(din,n,dt,steps,mjd0,dout);
+    k_history<<<grd,blk>>>(din,n,dt,steps,with_drag,area,mass,cd,cr,mjd0,dout);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
     CUDA_CHECK(cudaMemcpy(output_history, dout, out_bytes, cudaMemcpyDeviceToHost));

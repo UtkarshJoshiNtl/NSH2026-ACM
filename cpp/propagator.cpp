@@ -116,7 +116,7 @@ std::array<double,3> Propagator::acceleration(const std::array<double,3>& r, dou
     az += j2f * z * (5.0 * z2_r2 - 3.0);
 
     // J3
-    double j3f   = 2.5 * J3 * MU * RE * RE * RE / r7;
+    double j3f   = -2.5 * J3 * MU * RE * RE * RE / r7;
     ax += j3f * x * (7.0 * z2_r2 * z - 3.0 * z);
     ay += j3f * y * (7.0 * z2_r2 * z - 3.0 * z);
     az += j3f * (7.0 * z2_r2 * z * z - 6.0 * z * z + 0.6 * r2);
@@ -182,7 +182,7 @@ std::array<double,3> Propagator::acceleration_with_drag(
             double d_mag = std::sqrt(dx*dx + dy*dy + dz*dz);
             double au_scale = (AU_CONST / rs_mag);
             au_scale *= au_scale;
-            double coeff = -P_SR * cr * (area / mass) * shadow * au_scale * 1e-3 / d_mag;
+            double coeff = P_SR * cr * (area / mass) * shadow * au_scale * 1e-3 / d_mag;
             a[0] += coeff * dx;
             a[1] += coeff * dy;
             a[2] += coeff * dz;
@@ -336,7 +336,9 @@ std::vector<StateVector> Propagator::batch_propagate_steps_drag(
 
 void Propagator::batch_propagate_full_history(
         const double* initial_states, int n,
-        double dt_seconds, int steps, double mjd0,
+        double dt_seconds, int steps, 
+        double area, double mass, double cd, double cr, bool with_drag,
+        double mjd0,
         double* output_history) const {
     #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
@@ -345,7 +347,11 @@ void Propagator::batch_propagate_full_history(
         std::memcpy(&output_history[0 * (n * 6) + i * 6], s.raw(), 6 * sizeof(double));
 
         for (int step = 0; step < steps; ++step) {
-            s = rk4_step(s, dt_seconds, mjd0, step);
+            if (with_drag) {
+                s = rk4_step_drag(s, dt_seconds, area, mass, cd, cr, mjd0, step);
+            } else {
+                s = rk4_step(s, dt_seconds, mjd0, step);
+            }
             std::memcpy(&output_history[(step + 1) * (n * 6) + i * 6], s.raw(), 6 * sizeof(double));
         }
     }
@@ -415,7 +421,7 @@ PYBIND11_MODULE(physics_engine, m) {
                 p.propagate_batch_drag(static_cast<double*>(out.mutable_data()), n, dt, steps, area, mass, cd, cr, mjd0);
                 return out;
             }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("area"), py::arg("mass"), py::arg("cd"), py::arg("cr") = 1.5, py::arg("mjd0") = 0.0)
-        .def("batch_propagate_full_history", [](const Propagator& self, py::array_t<double> states, double dt, int steps, double mjd0) {
+        .def("batch_propagate_full_history", [](const Propagator& self, py::array_t<double> states, double dt, int steps, double area, double mass, double cd, double cr, bool with_drag, double mjd0) {
             auto buf = states.request();
             int n = (int)buf.shape[0];
             double* in_ptr = (double*)buf.ptr;
@@ -426,10 +432,11 @@ PYBIND11_MODULE(physics_engine, m) {
 
             {
                 py::gil_scoped_release release;
-                self.batch_propagate_full_history(in_ptr, n, dt, steps, mjd0, out_ptr);
+                self.batch_propagate_full_history(in_ptr, n, dt, steps, area, mass, cd, cr, with_drag, mjd0, out_ptr);
             }
             return history;
-        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
+        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), 
+           py::arg("area") = 0.0, py::arg("mass") = 1.0, py::arg("cd") = 2.2, py::arg("cr") = 1.5, py::arg("with_drag") = false, py::arg("mjd0") = 0.0);
 
     // ConjunctionWarning
     py::class_<ConjunctionWarning>(m, "ConjunctionWarning")
@@ -510,14 +517,14 @@ PYBIND11_MODULE(physics_engine, m) {
         return states; // Return the same array since it was modified in-place
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
 
-    m.def("cuda_propagate_batch_soa", [](py::array_t<double> states, double dt, int steps, double mjd0) {
+    m.def("cuda_propagate_batch_soa", [](py::array_t<double> states, double dt, int steps, double area, double mass, double cd, double cr, bool with_drag, double mjd0) {
         auto buf = states.request();
         if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
         int n = (int)buf.shape[0];
         double* ptr = (double*)buf.ptr;
-        { py::gil_scoped_release release; cuda_propagate_batch_soa(ptr, n, dt, steps, mjd0); }
+        { py::gil_scoped_release release; cuda_propagate_batch_soa(ptr, n, dt, steps, area, mass, cd, cr, with_drag, mjd0); }
         return states;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("area") = 0.0, py::arg("mass") = 1.0, py::arg("cd") = 2.2, py::arg("cr") = 1.5, py::arg("with_drag") = false, py::arg("mjd0") = 0.0);
 
     m.def("cuda_propagate_batch_streamed", [](py::array_t<double> states, double dt, int steps, double mjd0) {
         auto buf = states.request();
@@ -541,7 +548,7 @@ PYBIND11_MODULE(physics_engine, m) {
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
        py::arg("area"), py::arg("mass"), py::arg("cd"), py::arg("cr") = 1.5, py::arg("mjd0") = 0.0);
 
-    m.def("cuda_propagate_full_history", [](py::array_t<double> states, double dt, int steps, double mjd0) {
+    m.def("cuda_propagate_full_history", [](py::array_t<double> states, double dt, int steps, double area, double mass, double cd, double cr, bool with_drag, double mjd0) {
         auto buf = states.request();
         int n = (int)buf.shape[0];
         double* in_ptr = (double*)buf.ptr;
@@ -553,10 +560,10 @@ PYBIND11_MODULE(physics_engine, m) {
 
         {
             py::gil_scoped_release release;
-            cuda_propagate_full_history(in_ptr, n, dt, steps, mjd0, out_ptr);
+            cuda_propagate_full_history(in_ptr, n, dt, steps, area, mass, cd, cr, with_drag, mjd0, out_ptr);
         }
         return history;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("area") = 0.0, py::arg("mass") = 1.0, py::arg("cd") = 2.2, py::arg("cr") = 1.5, py::arg("with_drag") = false, py::arg("mjd0") = 0.0);
 
     m.def("cuda_detect_conjunctions", [](py::array_t<double> sats, py::array_t<double> debs, 
                                         double lookahead, double step, double mjd0) {

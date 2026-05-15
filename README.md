@@ -52,18 +52,12 @@ Astrosis is engineered for throughput. Below is a comparison of backends on an *
 
 | Benchmark | Python | NumPy | C++ (Speedup) | CUDA (Speedup) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Single propagation** (5k iters) | 35.8 ms | 1185 ms | 2.7 ms (13.4×) | N/A |
-| **Batch Propagation** (1k sats) | 740 ms | 47.1 ms | 2.0 ms (376×) | 7.2 ms (102×) |
-| **Conjunction Detection** (100x100) | 518 ms | N/A | 231 ms (2.2×) | 37.4 ms (13.9×) |
-| **Monte Carlo $P_c$** (100k samples) | N/A | N/A | N/A | **< 1,000 ms** |
+| **Single propagation** (50k iters) | 395.0 ms | 10093.8 ms | 21.9 ms (18.0×) | N/A |
+| **Batch Propagation** (1k sats) | 7033.7 ms | 361.4 ms | 13.9 ms (507×) | 46.9 ms (150×) |
+| **Conjunction Detection** (400x400) | 46718 ms | N/A | 5159 ms (9.1×) | 564 ms (82.8×) |
+| **Maneuver Planning** (10k iters) | 424.5 ms | N/A | 6.0 ms (70.9×) | N/A |
 
-> The CUDA backend utilizes **SoA (Structure-of-Arrays)** memory layout, achieving **5.4× more throughput** than standard AoS layouts by ensuring 100% memory access coalescing for the RK4 kernel.
-
-### 📈 Performance Analysis
-| CUDA Roofline Model | CPU/GPU Crossover |
-| :---: | :---: |
-| ![Roofline](validation/plots/8_roofline.png) | ![Crossover](validation/plots/7_cuda_crossover.png) |
-| *Roofline analysis showing compute-bound FP64 regime* | *Throughput crossover at N≈300 satellites* |
+> **Note on Crossover**: For small batches (N < 5000) of simple RK4 propagation, the multi-threaded C++ engine (OpenMP) currently outperforms the CUDA engine due to the extremely low latency of CPU execution vs. GPU kernel launch overhead. However, for compute-intensive tasks like all-pairs conjunction screening, the CUDA engine provides an **82.8× speedup**.
 
 ---
 
@@ -71,16 +65,21 @@ Astrosis is engineered for throughput. Below is a comparison of backends on an *
 
 We don't just claim accuracy; we prove it. The `validation/` suite performs:
 1. **Energy Conservation**: Δε/ε < 1e-7 over 24h (proving RK4 sub-step correctness).
-2. **RAAN Precession**: Verifies J2-driven nodal regression against analytical formulas.
+2. **RAAN Precession**: Verifies J2-driven nodal regression against analytical formulas (target < 0.03°/day).
 3. **SGP4 Comparison**: Quantifies divergence against industry standards (ISS TLE).
 4. **Convergence Order**: Proves exactly 4th-order behavior (error reductions of 16× per dt halving).
 5. **SRP Divergence**: Demonstrates physical coupling of trajectory to area-to-mass ratios.
 
 ### 🧪 Physics Validation Results
-| Energy Conservation | SGP4 Comparison |
+| Energy Conservation | SGP4 Comparison | RAAN Precession |
+| :---: | :---: | :---: |
+| ![Energy](validation/plots/1_energy_conservation.png) | ![SGP4](validation/plots/2_sgp4_comparison.png) | ![RAAN](validation/plots/3_raan_precession.png) |
+| *24h Energy error maintained below 1e-7* | *Cross-validation against ISS TLE baseline* | *J2 Nodal regression accuracy* |
+
+| RK4 Convergence | SRP Divergence |
 | :---: | :---: |
-| ![Energy](validation/plots/1_energy_conservation.png) | ![SGP4](validation/plots/2_sgp4_comparison.png) |
-| *24h Energy error maintained below 1e-7* | *Cross-validation against ISS TLE baseline* |
+| ![Convergence](validation/plots/4_rk4_convergence.png) | ![SRP](validation/plots/5_srp_divergence.png) |
+| *Verified 4th-order integration slope* | *Physical coupling of Solar Radiation Pressure* |
 
 ---
 

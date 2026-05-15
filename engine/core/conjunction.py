@@ -127,6 +127,7 @@ class ConjunctionDetector:
         lookahead_s: float = 86400.0,
         step_s: float = 60.0,
         tle_age_days: float = 1.0,
+        mjd0: float = 0.0,
     ) -> List[ConjunctionWarning]:
         """
         Detect potential collisions within a lookahead window.
@@ -156,8 +157,9 @@ class ConjunctionDetector:
 
         # Lazy import from accelerator to avoid module-level circular dependency
         from .accelerator import propagate_batch_full_history
-        all_sats = propagate_batch_full_history(sat_states, step_s, n_steps)
-        all_debs = propagate_batch_full_history(debris_states, step_s, n_steps)
+        # Pass mjd0 to ensure history matches high-fidelity requirements if mjd0 > 0
+        all_sats = propagate_batch_full_history(sat_states, step_s, n_steps, mjd0=mjd0)
+        all_debs = propagate_batch_full_history(debris_states, step_s, n_steps, mjd0=mjd0)
 
         # 3. TCA covariance: empirical 1-sigma grows with TLE age
         sigma_pos = 0.3 * math.sqrt(max(tle_age_days, 0.1))
@@ -190,17 +192,18 @@ class ConjunctionDetector:
                 t_hi = min(lookahead_s, tca_coarse + step_s)
 
                 def dist_at_t(t: float) -> float:
-                    # Propagate from beginning with step_s steps for efficiency
-                    n_full = int(t / step_s)
-                    t_rem = t - n_full * step_s
-                    curr_s = s0
-                    curr_d = d0
-                    for _ in range(n_full):
-                        curr_s = rk4_step(curr_s, step_s)
-                        curr_d = rk4_step(curr_d, step_s)
+                    # Optimize: Start from nearest pre-propagated step in the history
+                    n_nearest = int(t / step_s)
+                    t_rem = t - n_nearest * step_s
+                    
+                    curr_s = tuple(all_sats[n_nearest][sat_idx])
+                    curr_d = tuple(all_debs[n_nearest][deb_idx])
+                    
                     if t_rem > 1e-9:
-                        curr_s = rk4_step(curr_s, t_rem)
-                        curr_d = rk4_step(curr_d, t_rem)
+                        # Only propagate the remaining small delta
+                        curr_s = rk4_step(curr_s, t_rem, mjd0=mjd0, current_step=n_nearest)
+                        curr_d = rk4_step(curr_d, t_rem, mjd0=mjd0, current_step=n_nearest)
+                        
                     dx = curr_s[0]-curr_d[0]; dy = curr_s[1]-curr_d[1]; dz = curr_s[2]-curr_d[2]
                     return math.sqrt(dx*dx + dy*dy + dz*dz)
 

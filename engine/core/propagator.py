@@ -32,7 +32,7 @@ def _calculate_gravity_acceleration(x, y, z, r_mag, r2, r3, r5, r7):
 
     # J3
     zr = z / r_mag
-    j3f = 2.5 * J3 * MU * RE**3 / r7
+    j3f = -2.5 * J3 * MU * RE**3 / r7
     # Correct formula: a_x = j3f * x * (7*z^3/r^2 - 3*z)
     ax += j3f * x * (7.0 * z2_r2 * z - 3.0 * z)
     ay += j3f * y * (7.0 * z2_r2 * z - 3.0 * z)
@@ -159,7 +159,7 @@ def _calculate_srp_acceleration(r, r_sun, area, mass, cr):
     # Approximate AU scale factor (usually close to 1)
     au_scale = (AU / rs_mag)**2
     
-    coeff = -P_SR * cr * (area / mass) * shadow * au_scale * 1e-3 / d_mag
+    coeff = P_SR * cr * (area / mass) * shadow * au_scale * 1e-3 / d_mag
     
     return coeff * dx, coeff * dy, coeff * dz
 
@@ -277,7 +277,7 @@ def _accel_batch(R: np.ndarray, V: np.ndarray,
     az += J2F * Z * (5.0 * Z2_R2 - 3.0)
 
     ZR = Z / R_mag
-    J3F = 2.5 * J3 * MU * RE**3 / R7
+    J3F = -2.5 * J3 * MU * RE**3 / R7
     ax += J3F * X * (7.0 * Z2_R2 * Z - 3.0 * Z)
     ay += J3F * Y * (7.0 * Z2_R2 * Z - 3.0 * Z)
     az += J3F * (7.0 * Z2_R2 * Z * Z - 6.0 * Z * Z + 0.6 * R2)

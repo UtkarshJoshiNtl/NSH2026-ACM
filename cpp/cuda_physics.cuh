@@ -93,7 +93,7 @@ __device__ __forceinline__ void accel(
     az += j2f * z * (5.0 * z2r2 - 3.0);
     
     // J3
-    double j3f = 2.5 * C_J3 * C_MU * C_RE * C_RE * C_RE / r7;
+    double j3f = -2.5 * C_J3 * C_MU * C_RE * C_RE * C_RE / r7;
     ax += j3f * x * (7.0 * z2r2 * z - 3.0 * z);
     ay += j3f * y * (7.0 * z2r2 * z - 3.0 * z);
     az += j3f * (7.0 * z2r2 * z * z - 6.0 * z * z + 0.6 * r2);
@@ -147,7 +147,7 @@ __device__ __forceinline__ void accel_drag(
             double d_mag = sqrt(dx*dx + dy*dy + dz*dz);
             double au_scale = C_AU / rs_mag;
             au_scale *= au_scale;
-            double coeff = -C_P_SR * cr * (A / m) * shadow * au_scale * 1e-3 / d_mag;
+            double coeff = C_P_SR * cr * (A / m) * shadow * au_scale * 1e-3 / d_mag;
             ax += coeff * dx; ay += coeff * dy; az += coeff * dz;
         }
     }

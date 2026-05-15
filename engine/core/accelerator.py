@@ -179,13 +179,13 @@ def propagate_batch_full_history(states: list, dt_seconds: float, steps: int,
     
     if _HAS_CUDA:
         try:
-            return _physics.cuda_propagate_full_history(arr, dt_seconds, steps)
+            return _physics.cuda_propagate_full_history(arr, dt_seconds, steps, area, mass, cd, cr, with_drag, mjd0)
         except Exception as e:
             logger.warning(f"CUDA propagate_full_history failed: {e}. Falling back to C++.")
     
     if _HAS_BATCH_CPP:
         try:
-            return _physics.Propagator().batch_propagate_full_history(arr, dt_seconds, steps)
+            return _physics.Propagator().batch_propagate_full_history(arr, dt_seconds, steps, area, mass, cd, cr, with_drag, mjd0)
         except Exception as e:
             logger.warning(f"C++ batch_propagate_full_history failed: {e}. Falling back to NumPy.")
         
@@ -205,7 +205,8 @@ def propagate_batch_full_history(states: list, dt_seconds: float, steps: int,
 
 def detect_conjunctions(sat_states: list, debris_states: list,
                          lookahead: float = 86400.0,
-                         step_s: float = 60.0) -> list:
+                         step_s: float = 60.0,
+                         mjd0: float = 0.0) -> list:
     """
     All-pairs conjunction screening.
     """
@@ -213,7 +214,7 @@ def detect_conjunctions(sat_states: list, debris_states: list,
         try:
             s_arr = np.array(sat_states, dtype=np.float64)
             d_arr = np.array(debris_states, dtype=np.float64)
-            return _physics.cuda_detect_conjunctions(s_arr, d_arr, lookahead, step_s)
+            return _physics.cuda_detect_conjunctions(s_arr, d_arr, lookahead, step_s, mjd0)
         except Exception as e:
             logger.warning(f"CUDA detect_conjunctions failed: {e}. Falling back to C++.")
 
@@ -221,14 +222,14 @@ def detect_conjunctions(sat_states: list, debris_states: list,
         try:
             s_arr = np.array(sat_states, dtype=np.float64)
             d_arr = np.array(debris_states, dtype=np.float64)
-            return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s)
+            return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s, mjd0=mjd0)
         except Exception as e:
             logger.warning(f"C++ detect_conjunctions failed: {e}. Falling back to Python.")
 
     from .conjunction import ConjunctionDetector as PyConjunctionDetector
     detector = PyConjunctionDetector()
     return detector.detect(sat_states, debris_states,
-                            lookahead_s=lookahead, step_s=step_s)
+                            lookahead_s=lookahead, step_s=step_s, mjd0=mjd0)
 
 
 # ── Fuel & maneuver ───────────────────────────────────────────────────────────

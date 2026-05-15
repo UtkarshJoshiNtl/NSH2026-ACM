@@ -82,7 +82,9 @@ public:
         const double* initial_states,
         int n,
         double dt_seconds,
-        int steps, double mjd0,
+        int steps,
+        double area, double mass, double cd, double cr, bool with_drag,
+        double mjd0,
         double* output_history) const;
 
 private:
