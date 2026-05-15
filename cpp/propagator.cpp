@@ -179,10 +179,9 @@ std::array<double,3> Propagator::acceleration_with_drag(
             double dx = r[0] - r_sun[0];
             double dy = r[1] - r_sun[1];
             double dz = r[2] - r_sun[2];
-            double d_mag = std::sqrt(dx*dx + dy*dy + dz*dz);
             double au_scale = (AU_CONST / rs_mag);
             au_scale *= au_scale;
-            double coeff = P_SR * cr * (area / mass) * shadow * au_scale * 1e-3 / d_mag;
+            double coeff = P_SR * cr * (area / mass) * shadow * au_scale * 1e-3;
             a[0] += coeff * dx;
             a[1] += coeff * dy;
             a[2] += coeff * dz;

@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse
 import sys, os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from engine.physics.accelerator import propagate_batch
+from engine.core.accelerator import propagate_batch
 
 app = FastAPI()
 
@@ -27,9 +27,8 @@ async def read_index():
 @app.get("/api/constellation")
 async def get_constellation():
     # Propagate 1 minute forward
-    # states = propagate_batch(INITIAL_SATS, dt_seconds=60, steps=1)
-    # return [{"id": i, "pos": s[:3]} for i, s in enumerate(states)]
-    pass
+    states = propagate_batch(INITIAL_SATS, dt_seconds=60, steps=1)
+    return [{"id": i, "pos": s[:3]} for i, s in enumerate(states)]
 
 if __name__ == "__main__":
     import uvicorn

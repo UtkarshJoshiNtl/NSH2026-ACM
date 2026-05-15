@@ -106,16 +106,16 @@ def test_rk4_fourth_order_convergence():
     re-propagated from t=0 on each iteration (effectively 1st order in time).
     """
     state = tuple(_circular_orbit(400.0))
-    T_orbit = 2 * math.pi * math.sqrt((RE + 400.0)**3 / MU)
+    total_time = 7200.0
 
     def propagate_n_steps(dt):
-        n = int(T_orbit / dt)
+        n = int(total_time / dt)
         curr = state
         for _ in range(n):
             curr = rk4_step(curr, dt)
         return curr
 
-    # Reference: very fine integration
+    # Reference: very fine integration over the same elapsed time.
     ref = propagate_n_steps(2.0)
 
     err_coarse = math.sqrt(sum((propagate_n_steps(60.0)[k] - ref[k])**2 for k in range(3)))
@@ -168,17 +168,14 @@ def test_conjunction_detects_advisory():
 
 def test_conjunction_finds_converging_pairs():
     """
-    Two objects starting 200 km apart BUT converging (crossing velocities)
-    must be detected. This was the broad-phase bug: initial-distance culling
-    at 50 km missed pairs that start far apart but intersect within lookahead.
+    Two objects starting 100 km apart but moving toward each other must be
+    detected. This was the broad-phase bug: initial-distance culling at 50 km
+    missed pairs that start far apart but intersect within lookahead.
     """
-    # Object A: moving in +X direction
     sat = [RE + 400.0, 0.0, 0.0, 0.0, 7.66, 0.0]
-    # Object B: far away but moving toward A (100 km separation, converging)
-    deb = [RE + 400.0 + 100.0, 0.0, 0.0, -7.66, 7.66, 0.0]  # closing at 7.66 km/s
+    deb = [RE + 400.0 + 100.0, 0.0, 0.0, -0.75, 7.66, 0.0]
 
-    warns = detect_conjunctions([sat], [deb], lookahead=60.0, step_s=1.0)
-    # They will be within WARNING distance within ~13 seconds
+    warns = detect_conjunctions([sat], [deb], lookahead=300.0, step_s=1.0)
     assert len(warns) > 0, (
         "Converging pair not detected. Broad-phase may be incorrectly culling "
         "pairs based on t=0 distance alone."

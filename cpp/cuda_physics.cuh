@@ -144,10 +144,9 @@ __device__ __forceinline__ void accel_drag(
         
         if (shadow > 0.0) {
             double dx = x - sx, dy = y - sy, dz = z - sz;
-            double d_mag = sqrt(dx*dx + dy*dy + dz*dz);
             double au_scale = C_AU / rs_mag;
             au_scale *= au_scale;
-            double coeff = C_P_SR * cr * (A / m) * shadow * au_scale * 1e-3 / d_mag;
+            double coeff = C_P_SR * cr * (A / m) * shadow * au_scale * 1e-3;
             ax += coeff * dx; ay += coeff * dy; az += coeff * dz;
         }
     }

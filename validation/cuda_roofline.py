@@ -109,12 +109,12 @@ def parse_ncu_csv(csv_text: str):
     return flops, total_bytes
 
 
-def plot_roofline(ai: float, perf_gflops: float, label: str,
-                  has_ncu_data: bool = False):
+def plot_roofline(ai: float, achieved_gflops: float | None, label: str,
+                  has_ncu_data: bool = False, estimated_ceiling_gflops: float | None = None):
     """
     Plot the Roofline model for RTX 2050.
     ai = arithmetic intensity [FLOP/byte]
-    perf_gflops = achieved performance [GFLOPS/s]
+    achieved_gflops = measured performance [GFLOPS/s], or None if unavailable
     """
     ai_range = np.logspace(-2, 4, 500)
 
@@ -137,15 +137,28 @@ def plot_roofline(ai: float, perf_gflops: float, label: str,
     ax.axvline(ai_ridge, color="#d29922", lw=1.2, ls="-.",
                label=f"Ridge point  AI={ai_ridge:.1f} FLOP/byte")
 
-    # Plot the kernel
-    color = "#3fb950" if has_ncu_data else "#f85149"
-    marker_label = f"{label}  (AI={ai:.2f}, {perf_gflops:.1f} GFLOPS/s)"
-    if not has_ncu_data:
-        marker_label += "  [theoretical — run ncu for measured]"
-    ax.scatter([ai], [perf_gflops], s=200, color=color, zorder=5, label=marker_label)
+    if estimated_ceiling_gflops is None:
+        estimated_ceiling_gflops = float(min(PEAK_BW * ai, PEAK_FP64))
 
-    region = "memory-bound" if ai < ai_ridge else "compute-bound"
-    ax.text(ai * 1.2, perf_gflops * 0.7, region, color=color, fontsize=9)
+    # Plot measured point if we have one, otherwise show the theoretical ceiling.
+    if achieved_gflops is not None:
+        ax.scatter([ai], [achieved_gflops], s=200, color="#3fb950", zorder=5,
+                   label=f"{label} measured  (AI={ai:.2f}, {achieved_gflops:.1f} GFLOPS/s)")
+        ax.scatter([ai], [estimated_ceiling_gflops], s=90, facecolors="none",
+                   edgecolors="#f85149", linewidths=2.0, zorder=6,
+                   label=f"Roofline ceiling at AI={ai:.2f}: {estimated_ceiling_gflops:.1f} GFLOPS/s")
+        ax.annotate(
+            "measured",
+            xy=(ai, achieved_gflops),
+            xytext=(ai * 1.15, achieved_gflops * 0.75),
+            color="#3fb950",
+            fontsize=9,
+        )
+    else:
+        ax.scatter([ai], [estimated_ceiling_gflops], s=200, color="#f85149", zorder=5,
+                   label=f"{label} theoretical ceiling  (AI={ai:.2f}, {estimated_ceiling_gflops:.1f} GFLOPS/s)")
+        region = "memory-bound" if ai < ai_ridge else "compute-bound"
+        ax.text(ai * 1.2, estimated_ceiling_gflops * 0.7, region, color="#f85149", fontsize=9)
 
     ax.set_xlabel("Arithmetic Intensity (FLOP / byte)")
     ax.set_ylabel("Performance (GFLOPS/s)")
@@ -169,7 +182,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     has_ncu_data = False
-    ai = perf_gflops = 0.0
+    ai = 0.0
+    achieved_gflops = None
 
     # Theoretical analysis of the RK4 kernel:
     # Per satellite per step: ~120 FP64 multiplies/adds in 4 derivative evaluations
@@ -194,19 +208,25 @@ if __name__ == "__main__":
                     t0 = time.perf_counter()
                     pe.cuda_propagate_batch(states, 10.0, 100)
                     elapsed = time.perf_counter() - t0
-                    perf_gflops = (flops / elapsed) / 1e9
+                    achieved_gflops = (flops / elapsed) / 1e9
                     has_ncu_data = True
                     print(f"  AI = {ai:.2f} FLOP/byte")
-                    print(f"  Performance = {perf_gflops:.1f} GFLOPS/s")
+                    print(f"  Performance = {achieved_gflops:.1f} GFLOPS/s")
                 except Exception as e:
                     print(f"  Could not measure time: {e}")
 
     if not has_ncu_data:
-        # Theoretical point: AI ≈ 2.5, performance ≈ PEAK_BW × AI (memory-bound)
+        # Theoretical ceiling point: AI ≈ 2.5.
         ai = THEORETICAL_AI
-        perf_gflops = min(PEAK_BW * ai, PEAK_FP64)
-        print(f"  Using theoretical values: AI={ai:.2f}, perf≈{perf_gflops:.1f} GFLOPS/s")
+        achieved_gflops = None
+        print(f"  Using theoretical values: AI={ai:.2f}, roofline ceiling≈{min(PEAK_BW * ai, PEAK_FP64):.1f} GFLOPS/s")
         print("  To get measured values: sudo ncu ... python validation/cuda_roofline.py --ncu-mode")
 
-    path = plot_roofline(ai, perf_gflops, "RK4 k_prop_aos", has_ncu_data)
+    path = plot_roofline(
+        ai,
+        achieved_gflops,
+        "RK4 k_prop_aos",
+        has_ncu_data,
+        estimated_ceiling_gflops=min(PEAK_BW * ai, PEAK_FP64),
+    )
     print(f"  Saved: {path}")

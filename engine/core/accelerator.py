@@ -222,7 +222,7 @@ def detect_conjunctions(sat_states: list, debris_states: list,
         try:
             s_arr = np.array(sat_states, dtype=np.float64)
             d_arr = np.array(debris_states, dtype=np.float64)
-            return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s, mjd0=mjd0)
+            return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s)
         except Exception as e:
             logger.warning(f"C++ detect_conjunctions failed: {e}. Falling back to Python.")
 

@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 
 PLOTS_DIR = os.path.join(os.path.dirname(__file__), "plots")
 os.makedirs(PLOTS_DIR, exist_ok=True)
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 STYLE = {
     "figure.facecolor": "#0d1117", "axes.facecolor": "#161b22",
@@ -62,14 +63,61 @@ def _gen_states(n: int) -> np.ndarray:
 
 
 def _time_cpp_batch(states: np.ndarray, threads: int) -> float:
-    """Time the C++ batch propagator with a given thread count."""
+    """Time the C++ batch propagator with a given thread count.
+
+    The measurement is executed in a fresh subprocess so the OpenMP thread
+    count is fixed before the C++ module is imported.
+    """
+    import tempfile
+    import pickle
+
+    with tempfile.NamedTemporaryFile(mode='wb', suffix='.pkl', delete=False) as f:
+        states_file = f.name
+        pickle.dump((states, DT, STEPS), f)
+
+    script = f"""
+import os
+import pickle
+import sys
+import time
+
+sys.path.insert(0, r"{os.path.join(ROOT_DIR, "cpp", "build")}")
+import physics_engine as _cpp
+
+with open(r"{states_file}", "rb") as f:
+    states, dt, steps = pickle.load(f)
+
+prop = _cpp.Propagator()
+t0 = time.perf_counter()
+prop.batch_propagate_steps(states, dt, steps)
+elapsed = time.perf_counter() - t0
+print(elapsed)
+"""
+
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(threads)
-    arr = states.copy()
-    prop = _cpp.Propagator()
-    t0 = time.perf_counter()
-    prop.batch_propagate_steps(arr, DT, STEPS)
-    return time.perf_counter() - t0
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        script_file = f.name
+        f.write(script)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, script_file],
+            env=env,
+            cwd=ROOT_DIR,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "C++ timing subprocess failed")
+        elapsed = float(result.stdout.strip().splitlines()[-1])
+    finally:
+        os.unlink(states_file)
+        os.unlink(script_file)
+    
+    return elapsed
 
 
 def _time_cuda(states: np.ndarray) -> float:
@@ -99,11 +147,9 @@ def strong_scaling():
     thread_counts = [1, 2, 4, 6, 8, 12, 16]
     times = []
     for t in thread_counts:
-        os.environ["OMP_NUM_THREADS"] = str(t)
         elapsed = _time_cpp_batch(states, t)
         times.append(elapsed)
         print(f"  T={t:2d} → {elapsed*1000:.1f} ms")
-    os.environ.pop("OMP_NUM_THREADS", None)
 
     t1 = times[0]
     speedups  = [t1 / t for t in times]
@@ -136,7 +182,6 @@ def weak_scaling():
     t1 = None
 
     for tc in thread_counts:
-        os.environ["OMP_NUM_THREADS"] = str(tc)
         N = N_per_thread * tc
         states = _gen_states(N)
         elapsed = _time_cpp_batch(states, tc)
@@ -145,7 +190,6 @@ def weak_scaling():
         eta = t1 / elapsed if t1 else 1.0
         efficiencies.append(eta)
         print(f"  T={tc:2d}  N={N:6,}  η={eta:.3f}")
-    os.environ.pop("OMP_NUM_THREADS", None)
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(thread_counts, efficiencies, "s-", color=GREEN)
