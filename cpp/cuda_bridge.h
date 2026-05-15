@@ -34,6 +34,11 @@ void cuda_propagate_batch_drag(
     double* states_inout, int n,
     double dt_s, int steps,
     double area, double mass, double cd);
+
+void cuda_propagate_full_history(
+    const double* initial_states, int n,
+    double dt_s, int steps,
+    double* output_history);
 #endif
 
 // ── Conjunction Detection ─────────────────────────────────────────────────────
@@ -41,8 +46,8 @@ void cuda_propagate_batch_drag(
 // Returns the same ConjunctionWarning objects as the CPU detector.
 #ifdef USE_CUDA
 std::vector<ConjunctionWarning> cuda_detect_conjunctions(
-    const std::vector<StateVector>& sat_states,
-    const std::vector<StateVector>& debris_states,
+    const double* sat_states, int ns,
+    const double* debris_states, int nd,
     double lookahead_s,
     double step_s);
 #endif

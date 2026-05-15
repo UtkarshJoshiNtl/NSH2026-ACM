@@ -96,17 +96,11 @@ __global__ void k_narrow(const double* __restrict__ sats, int ns,
 #ifdef USE_CUDA
 // ── Host launcher ─────────────────────────────────────────────────────────────
 std::vector<ConjunctionWarning> cuda_detect_conjunctions(
-        const std::vector<StateVector>& sats,
-        const std::vector<StateVector>& debris,
+        const double* sat_states, int ns,
+        const double* debris_states, int nd,
         double lookahead_s, double step_s) {
 
-    int ns = (int)sats.size(), nd = (int)debris.size();
     if (ns == 0 || nd == 0) return {};
-
-    // Flatten to double arrays
-    std::vector<double> hs(ns*6), hd(nd*6);
-    for (int i=0; i<ns; i++) for(int k=0; k<6; k++) hs[i*6+k] = sats[i][k];
-    for (int i=0; i<nd; i++) for(int k=0; k<6; k++) hd[i*6+k] = debris[i][k];
 
     double *ds, *dd; int *flags, *cnt;
     int max_out = std::max(ns * nd / 10, 1024);
@@ -118,8 +112,8 @@ std::vector<ConjunctionWarning> cuda_detect_conjunctions(
     CUDA_CHECK(cudaMalloc(&cnt,   sizeof(int)));
     CUDA_CHECK(cudaMalloc(&gout,  max_out*sizeof(GpuWarning)));
     
-    CUDA_CHECK(cudaMemcpy(ds, hs.data(), ns*6*sizeof(double), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(dd, hd.data(), nd*6*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(ds, sat_states, ns*6*sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(dd, debris_states, nd*6*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemset(cnt, 0, sizeof(int)));
 
     // Broad phase

@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 
 namespace py = pybind11;
 
@@ -176,7 +177,7 @@ StateVector Propagator::propagate_steps_drag(const StateVector& s,
 }
 
 // ── Batch propagation (flat double array, modified in-place) ─────────────────
-void Propagator::propagate_batch(std::vector<double>& states, int n,
+void Propagator::propagate_batch(double* states, int n,
                                   double dt, int steps) const {
 #ifdef _OPENMP
     #pragma omp parallel for schedule(dynamic, 16)
@@ -190,7 +191,7 @@ void Propagator::propagate_batch(std::vector<double>& states, int n,
     }
 }
 
-void Propagator::propagate_batch_drag(std::vector<double>& states, int n,
+void Propagator::propagate_batch_drag(double* states, int n,
                                        double dt, int steps,
                                        double area, double mass, double cd) const {
 #ifdef _OPENMP
@@ -213,7 +214,7 @@ std::vector<StateVector> Propagator::batch_propagate_steps(
     std::vector<double> flat(n * 6);
     for (int i = 0; i < n; ++i)
         for (int k = 0; k < 6; ++k) flat[i*6+k] = out[i][k];
-    propagate_batch(flat, n, dt, steps);
+    propagate_batch(flat.data(), n, dt, steps);
     for (int i = 0; i < n; ++i)
         for (int k = 0; k < 6; ++k) out[i][k] = flat[i*6+k];
     return out;
@@ -227,10 +228,30 @@ std::vector<StateVector> Propagator::batch_propagate_steps_drag(
     std::vector<double> flat(n * 6);
     for (int i = 0; i < n; ++i)
         for (int k = 0; k < 6; ++k) flat[i*6+k] = out[i][k];
-    propagate_batch_drag(flat, n, dt, steps, area, mass, cd);
+    propagate_batch_drag(flat.data(), n, dt, steps, area, mass, cd);
     for (int i = 0; i < n; ++i)
         for (int k = 0; k < 6; ++k) out[i][k] = flat[i*6+k];
     return out;
+}
+
+void Propagator::batch_propagate_full_history(
+        const double* initial_states, int n,
+        double dt, int steps, double* output_history) const {
+    
+    // Copy initial states to step 0
+    std::copy(initial_states, initial_states + n * 6, output_history);
+
+    // Propagate step by step
+    for (int step = 0; step < steps; ++step) {
+        double* prev = &output_history[step * n * 6];
+        double* next = &output_history[(step + 1) * n * 6];
+        
+        // Copy prev to next to start
+        std::copy(prev, prev + n * 6, next);
+        
+        // Propagate in place
+        propagate_batch(next, n, dt, 1);
+    }
 }
 
 // ── pybind11 bindings ─────────────────────────────────────────────────────────
@@ -266,14 +287,44 @@ PYBIND11_MODULE(physics_engine, m) {
              py::arg("state"), py::arg("total_seconds"), py::arg("step_size"),
              py::arg("area"), py::arg("mass"), py::arg("cd"))
         // Batch propagation (N satellites × steps) — CPU parallel
-        .def("batch_propagate_steps", &Propagator::batch_propagate_steps,
-             py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
-             py::call_guard<py::gil_scoped_release>(),
-             "Propagate N satellites for `steps` RK4 steps. Releases GIL for parallelism.")
-        .def("batch_propagate_steps_drag", &Propagator::batch_propagate_steps_drag,
-             py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
-             py::arg("area"), py::arg("mass"), py::arg("cd"),
-             py::call_guard<py::gil_scoped_release>());
+        .def("batch_propagate_steps", [](const Propagator& self, py::array_t<double> states, double dt, int steps) {
+            auto buf = states.request();
+            if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
+            int n = (int)buf.shape[0];
+            double* ptr = (double*)buf.ptr;
+            {
+                py::gil_scoped_release release;
+                self.propagate_batch(ptr, n, dt, steps);
+            }
+            return states;
+        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"))
+        .def("batch_propagate_steps_drag", [](const Propagator& self, py::array_t<double> states, double dt, int steps,
+                                              double area, double mass, double cd) {
+            auto buf = states.request();
+            int n = (int)buf.shape[0];
+            double* ptr = (double*)buf.ptr;
+            {
+                py::gil_scoped_release release;
+                self.propagate_batch_drag(ptr, n, dt, steps, area, mass, cd);
+            }
+            return states;
+        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
+           py::arg("area"), py::arg("mass"), py::arg("cd"))
+        .def("batch_propagate_full_history", [](const Propagator& self, py::array_t<double> states, double dt, int steps) {
+            auto buf = states.request();
+            int n = (int)buf.shape[0];
+            double* in_ptr = (double*)buf.ptr;
+            
+            py::array_t<double> history({steps + 1, n, 6});
+            auto h_buf = history.request();
+            double* out_ptr = (double*)h_buf.ptr;
+
+            {
+                py::gil_scoped_release release;
+                self.batch_propagate_full_history(in_ptr, n, dt, steps, out_ptr);
+            }
+            return history;
+        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
 
     // ConjunctionWarning
     py::class_<ConjunctionWarning>(m, "ConjunctionWarning")
@@ -294,10 +345,19 @@ PYBIND11_MODULE(physics_engine, m) {
     // ConjunctionDetector
     py::class_<ConjunctionDetector>(m, "ConjunctionDetector")
         .def(py::init<>())
-        .def("detect", &ConjunctionDetector::detect,
-             py::arg("sat_states"), py::arg("debris_states"),
-             py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0,
-             py::call_guard<py::gil_scoped_release>());
+        .def("detect", [](const ConjunctionDetector& self, py::array_t<double> sats, py::array_t<double> debs, 
+                          double lookahead, double step) {
+            auto b_sat = sats.request(); auto b_deb = debs.request();
+            int ns = (int)b_sat.shape[0], nd = (int)b_deb.shape[0];
+            std::vector<StateVector> vs(ns), vd(nd);
+            for(int i=0; i<ns; i++) std::copy((double*)b_sat.ptr + i*6, (double*)b_sat.ptr + (i+1)*6, vs[i].data());
+            for(int i=0; i<nd; i++) std::copy((double*)b_deb.ptr + i*6, (double*)b_deb.ptr + (i+1)*6, vd[i].data());
+            {
+                py::gil_scoped_release release;
+                return self.detect(vs, vd, lookahead, step);
+            }
+        }, py::arg("sat_states"), py::arg("debris_states"),
+           py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0);
 
     // ManeuverPlan
     py::class_<ManeuverPlan>(m, "ManeuverPlan")
@@ -328,55 +388,58 @@ PYBIND11_MODULE(physics_engine, m) {
     m.def("cuda_device_count", &cuda_device_count);
     m.def("cuda_print_device_info", &cuda_print_device_info);
 
-    m.def("cuda_propagate_batch", [](py::list states, double dt, int steps) {
-        int n = (int)states.size();
-        std::vector<double> flat(n * 6);
-        for(int i=0; i<n; i++) {
-            py::list s = states[i];
-            for(int k=0; k<6; k++) flat[i*6+k] = s[k].cast<double>();
-        }
-        
+    m.def("cuda_propagate_batch", [](py::array_t<double> states, double dt, int steps) {
+        auto buf = states.request();
+        if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
+        int n = (int)buf.shape[0];
+        // If the array is contiguous, we can pass the pointer directly
+        double* ptr = (double*)buf.ptr;
         {
             py::gil_scoped_release release;
-            cuda_propagate_batch(flat.data(), n, dt, steps);
+            cuda_propagate_batch(ptr, n, dt, steps);
         }
-
-        py::list out;
-        for(int i=0; i<n; i++) {
-            py::list s;
-            for(int k=0; k<6; k++) s.append(flat[i*6+k]);
-            out.append(s);
-        }
-        return out;
+        return states; // Return the same array since it was modified in-place
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
 
-    m.def("cuda_propagate_batch_drag", [](py::list states, double dt, int steps, 
+    m.def("cuda_propagate_batch_drag", [](py::array_t<double> states, double dt, int steps, 
                                           double area, double mass, double cd) {
-        int n = (int)states.size();
-        std::vector<double> flat(n * 6);
-        for(int i=0; i<n; i++) {
-            py::list s = states[i];
-            for(int k=0; k<6; k++) flat[i*6+k] = s[k].cast<double>();
-        }
-
+        auto buf = states.request();
+        int n = (int)buf.shape[0];
+        double* ptr = (double*)buf.ptr;
         {
             py::gil_scoped_release release;
-            cuda_propagate_batch_drag(flat.data(), n, dt, steps, area, mass, cd);
+            cuda_propagate_batch_drag(ptr, n, dt, steps, area, mass, cd);
         }
-
-        py::list out;
-        for(int i=0; i<n; i++) {
-            py::list s;
-            for(int k=0; k<6; k++) s.append(flat[i*6+k]);
-            out.append(s);
-        }
-        return out;
+        return states;
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
        py::arg("area"), py::arg("mass"), py::arg("cd"));
 
-    m.def("cuda_detect_conjunctions", &cuda_detect_conjunctions,
-          py::arg("sat_states"), py::arg("debris_states"),
-          py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0,
-          py::call_guard<py::gil_scoped_release>());
+    m.def("cuda_propagate_full_history", [](py::array_t<double> states, double dt, int steps) {
+        auto buf = states.request();
+        int n = (int)buf.shape[0];
+        double* in_ptr = (double*)buf.ptr;
+        
+        // We must allocate a new array for history
+        py::array_t<double> history({steps + 1, n, 6});
+        auto h_buf = history.request();
+        double* out_ptr = (double*)h_buf.ptr;
+
+        {
+            py::gil_scoped_release release;
+            cuda_propagate_full_history(in_ptr, n, dt, steps, out_ptr);
+        }
+        return history;
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+
+    m.def("cuda_detect_conjunctions", [](py::array_t<double> sats, py::array_t<double> debs, 
+                                        double lookahead, double step) {
+        auto b_sat = sats.request(); auto b_deb = debs.request();
+        int ns = (int)b_sat.shape[0], nd = (int)b_deb.shape[0];
+        {
+            py::gil_scoped_release release;
+            return cuda_detect_conjunctions((double*)b_sat.ptr, ns, (double*)b_deb.ptr, nd, lookahead, step);
+        }
+    }, py::arg("sat_states"), py::arg("debris_states"),
+       py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0);
 #endif
 }

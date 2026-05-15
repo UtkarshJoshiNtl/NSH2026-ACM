@@ -31,13 +31,13 @@ public:
                                      double cd) const;
 
     // ── Batch propagation (N satellites × steps, CPU parallel loops) ─────────
-    // states_inout: flat vector of N*6 doubles, modified in place.
-    void propagate_batch(std::vector<double>& states_inout,
+    // states_inout: flat array of N*6 doubles, modified in place.
+    void propagate_batch(double* states_inout,
                          int n,
                          double dt_seconds,
                          int steps) const;
 
-    void propagate_batch_drag(std::vector<double>& states_inout,
+    void propagate_batch_drag(double* states_inout,
                               int n,
                               double dt_seconds,
                               int steps,
@@ -58,6 +58,14 @@ public:
         double area,
         double mass,
         double cd) const;
+
+    // Returns a flat vector of (steps+1) * n * 6 doubles
+    void batch_propagate_full_history(
+        const double* initial_states,
+        int n,
+        double dt_seconds,
+        int steps,
+        double* output_history) const;
 
 private:
     std::array<double, 3> acceleration(const std::array<double, 3>& r) const;

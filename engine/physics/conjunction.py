@@ -50,27 +50,15 @@ class ConjunctionDetector:
         candidates = tree.query_ball_point(sat_pos, r=50.0) 
 
         # 2. Narrow Phase: Temporal sweep
-        # To avoid redundant propagation, we propagate all involved objects once.
-        # For simplicity in this implementation, we propagate ALL objects.
-        from .accelerator import propagate_batch
+        # To avoid redundant propagation, we use the optimized full history propagator.
+        from .accelerator import propagate_batch_full_history
         
         n_steps = int(lookahead_s / step_s)
-        dt = step_s
         
-        # Pre-propagate all satellites and debris
+        # Pre-propagate all satellites and debris using the high-performance backend
         # Shape: (steps+1, N, 6)
-        all_sats = [sat_states]
-        all_debs = [debris_states]
-        
-        curr_sats = sat_states
-        curr_debs = debris_states
-        
-        for _ in range(n_steps):
-            # We use steps=1 to get the state at each step
-            curr_sats = propagate_batch(curr_sats, dt, 1)
-            curr_debs = propagate_batch(curr_debs, dt, 1)
-            all_sats.append(curr_sats)
-            all_debs.append(curr_debs)
+        all_sats = propagate_batch_full_history(sat_states, step_s, n_steps)
+        all_debs = propagate_batch_full_history(debris_states, step_s, n_steps)
 
         warnings = []
         for sat_idx, candidate_list in enumerate(candidates):

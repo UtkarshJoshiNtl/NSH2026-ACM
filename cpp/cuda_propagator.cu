@@ -48,11 +48,23 @@ __global__ void k_prop_drag(double* __restrict__ S, int n, double dt, int steps,
     S[i*6+3] = vx; S[i*6+4] = vy; S[i*6+5] = vz;
 }
 
+// ── Simple Device Memory Cache ───────────────────────────────────────────────
+static double* g_cache_ptr = nullptr;
+static size_t  g_cache_size = 0;
+
+static double* get_device_mem(size_t bytes) {
+    if (bytes > g_cache_size) {
+        if (g_cache_ptr) cudaFree(g_cache_ptr);
+        CUDA_CHECK(cudaMalloc(&g_cache_ptr, bytes));
+        g_cache_size = bytes;
+    }
+    return g_cache_ptr;
+}
+
 static void run(double* s, int n, double dt, int steps,
                 bool drag, double A, double m, double cd){
     size_t bytes = (size_t)n * 6 * sizeof(double);
-    double* ds; 
-    CUDA_CHECK(cudaMalloc(&ds, bytes));
+    double* ds = get_device_mem(bytes);
     CUDA_CHECK(cudaMemcpy(ds, s, bytes, cudaMemcpyHostToDevice));
     
     int blk = 256;
@@ -64,7 +76,26 @@ static void run(double* s, int n, double dt, int steps,
     CUDA_CHECK(cudaGetLastError()); 
     CUDA_CHECK(cudaDeviceSynchronize());
     CUDA_CHECK(cudaMemcpy(s, ds, bytes, cudaMemcpyDeviceToHost));
-    cudaFree(ds);
+}
+
+// ── Full History Kernel ──────────────────────────────────────────────────────
+__global__ void k_history(const double* __restrict__ S0, int n, double dt, int steps, double* __restrict__ H){
+    int i = blockIdx.x * blockDim.x + threadIdx.x; 
+    if(i >= n) return;
+    
+    double x = S0[i*6],   y = S0[i*6+1], z = S0[i*6+2];
+    double vx = S0[i*6+3], vy = S0[i*6+4], vz = S0[i*6+5];
+    
+    // Step 0 is already at H[0*n*6 + i*6] if we copy S0 to H first, but it's safer to write it.
+    H[0 * n * 6 + i * 6 + 0] = x;  H[0 * n * 6 + i * 6 + 1] = y;  H[0 * n * 6 + i * 6 + 2] = z;
+    H[0 * n * 6 + i * 6 + 3] = vx; H[0 * n * 6 + i * 6 + 4] = vy; H[0 * n * 6 + i * 6 + 5] = vz;
+
+    for(int s=1; s<=steps; s++){
+        rk4_step_device(x, y, z, vx, vy, vz, dt, false, 0, 1, 0);
+        size_t offset = (size_t)s * n * 6 + i * 6;
+        H[offset + 0] = x;  H[offset + 1] = y;  H[offset + 2] = z;
+        H[offset + 3] = vx; H[offset + 4] = vy; H[offset + 5] = vz;
+    }
 }
 
 #ifdef USE_CUDA
@@ -93,5 +124,26 @@ void cuda_propagate_batch(double* s, int n, double dt, int steps){
 void cuda_propagate_batch_drag(double* s, int n, double dt, int steps,
                                 double A, double m, double cd){
     run(s, n, dt, steps, true, A, m, cd);
+}
+void cuda_propagate_full_history(const double* initial_states, int n, double dt, int steps, double* output_history){
+    size_t in_bytes = (size_t)n * 6 * sizeof(double);
+    size_t out_bytes = (size_t)(steps + 1) * n * 6 * sizeof(double);
+    
+    double *din, *dout;
+    CUDA_CHECK(cudaMalloc(&din, in_bytes));
+    CUDA_CHECK(cudaMalloc(&dout, out_bytes));
+    
+    CUDA_CHECK(cudaMemcpy(din, initial_states, in_bytes, cudaMemcpyHostToDevice));
+    
+    int blk = 256;
+    int grd = (n + blk - 1) / blk;
+    k_history<<<grd, blk>>>(din, n, dt, steps, dout);
+    
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK(cudaDeviceSynchronize());
+    CUDA_CHECK(cudaMemcpy(output_history, dout, out_bytes, cudaMemcpyDeviceToHost));
+    
+    cudaFree(din);
+    cudaFree(dout);
 }
 #endif

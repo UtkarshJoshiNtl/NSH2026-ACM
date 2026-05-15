@@ -282,6 +282,10 @@ def print_footer(results: List[BenchResult]):
 
 
 def main(quick: bool = False):
+    if _HAS_CUDA:
+        # Warmup CUDA context
+        _cpp.cuda_propagate_batch([[RE+400, 0, 0, 0, 7.6, 0]], 10.0, 1)
+
     print_header()
     results = []
 

@@ -27,5 +27,5 @@ public:
         const std::vector<std::array<double, 6>>& debris_states,
         double lookahead_s = 86400.0,
         double step_s = 60.0
-    );
+    ) const;
 };

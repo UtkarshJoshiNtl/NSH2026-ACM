@@ -108,39 +108,54 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
                      cd: float = 2.2, with_drag: bool = False) -> list:
     """
     Propagate N satellites for `steps` RK4 steps.
-
-    Backend priority: CUDA → C++ batch → NumPy batch → Python loop.
-
-    Parameters
-    ----------
-    states      : list of N 6-element state lists [km, km/s]
-    dt_seconds  : step size in seconds
-    steps       : number of RK4 steps
-
-    Returns
-    -------
-    List of N final state lists
     """
+    # Convert input list to NumPy array once
+    arr = np.array(states, dtype=np.float64)
+
     # ── CUDA GPU ──────────────────────────────────────────────────────────────
     if _HAS_CUDA:
         if with_drag:
-            return [list(s) for s in _physics.cuda_propagate_batch_drag(
-                states, dt_seconds, steps, area, mass, cd)]
-        return [list(s) for s in _physics.cuda_propagate_batch(
-            states, dt_seconds, steps)]
+            res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd)
+        else:
+            res = _physics.cuda_propagate_batch(arr, dt_seconds, steps)
+        return res.tolist()
 
     # ── C++ batch (GIL-released, optionally OpenMP) ───────────────────────────
     if _HAS_BATCH_CPP:
         prop = _physics.Propagator()
         if with_drag:
-            return [list(s) for s in prop.batch_propagate_steps_drag(
-                states, dt_seconds, steps, area, mass, cd)]
-        return [list(s) for s in prop.batch_propagate_steps(
-            states, dt_seconds, steps)]
+            res = prop.batch_propagate_steps_drag(arr, dt_seconds, steps, area, mass, cd)
+        else:
+            res = prop.batch_propagate_steps(arr, dt_seconds, steps)
+        return res.tolist()
 
     # ── NumPy vectorized fallback ─────────────────────────────────────────────
     return propagate_batch_numpy(states, dt_seconds, steps,
                                   area, mass, cd, with_drag)
+
+
+def propagate_batch_full_history(states: list, dt_seconds: float, steps: int) -> np.ndarray:
+    """
+    Propagate N satellites for `steps` steps and return the ENTIRE history.
+    Returns: NumPy array of shape (steps + 1, N, 6)
+    """
+    arr = np.array(states, dtype=np.float64)
+    
+    if _HAS_CUDA:
+        return _physics.cuda_propagate_full_history(arr, dt_seconds, steps)
+    
+    if _HAS_BATCH_CPP:
+        return _physics.Propagator().batch_propagate_full_history(arr, dt_seconds, steps)
+        
+    # Fallback (slow)
+    n = len(states)
+    history = np.zeros((steps + 1, n, 6))
+    history[0] = arr
+    curr = arr
+    for s in range(1, steps + 1):
+        curr = np.array(propagate_batch_numpy(curr.tolist(), dt_seconds, 1))
+        history[s] = curr
+    return history
 
 
 # ── Conjunction detection ─────────────────────────────────────────────────────
@@ -150,15 +165,16 @@ def detect_conjunctions(sat_states: list, debris_states: list,
                          step_s: float = 60.0) -> list:
     """
     All-pairs conjunction screening.
-    Backend priority: CUDA → C++ → Python.
     """
     if _HAS_CUDA and hasattr(_physics, "cuda_detect_conjunctions"):
-        return _physics.cuda_detect_conjunctions(
-            sat_states, debris_states, lookahead, step_s)
+        s_arr = np.array(sat_states, dtype=np.float64)
+        d_arr = np.array(debris_states, dtype=np.float64)
+        return _physics.cuda_detect_conjunctions(s_arr, d_arr, lookahead, step_s)
 
     if _HAS_CPP:
-        return _physics.ConjunctionDetector().detect(
-            sat_states, debris_states, lookahead, step_s)
+        s_arr = np.array(sat_states, dtype=np.float64)
+        d_arr = np.array(debris_states, dtype=np.float64)
+        return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s)
 
     detector = PyConjunctionDetector()
     return detector.detect(sat_states, debris_states,

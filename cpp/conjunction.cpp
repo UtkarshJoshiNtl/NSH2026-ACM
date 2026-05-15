@@ -9,7 +9,7 @@ std::vector<ConjunctionWarning> ConjunctionDetector::detect(
     const std::vector<std::array<double, 6>>& sat_states,
     const std::vector<std::array<double, 6>>& debris_states,
     double lookahead_s,
-    double step_s) {
+    double step_s) const {
     
     std::vector<ConjunctionWarning> warnings;
     Propagator prop;
