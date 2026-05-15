@@ -26,15 +26,5 @@ __all__ = [
     "sun_position_eci",
     "check_eclipse",
     "is_optically_visible",
-    "report_passes",
 ]
-
-
-def __getattr__(name: str):
-    if name != "report_passes":
-        raise AttributeError(f"module 'engine.geo' has no attribute {name!r}")
-    module = import_module(".analysis", __name__)
-    value = getattr(module, name)
-    globals()[name] = value
-    return value
 

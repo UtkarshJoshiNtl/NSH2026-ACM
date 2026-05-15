@@ -1,10 +1,9 @@
 """
-Astrosis Orbital Analysis Engine
-================================
-Entry point for the Astrosis CLI.
+Astrosis — GPU-Accelerated Orbital Propagation and Conjunction Analysis Engine
+================================================================================
+Entry point for the CLI.
 """
 
-import sys
 from engine.cli import main
 
 if __name__ == "__main__":

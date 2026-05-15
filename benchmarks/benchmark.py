@@ -30,10 +30,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # ── Import backends directly so we can force each one ────────────────────────
 from engine.core.propagator import rk4_step, rk4_batch, propagate_batch_numpy
 from engine.core.conjunction import ConjunctionDetector as PyDetector
-from engine.core.fuel import FuelTracker as PyFuelTracker
-from engine.core.maneuver import ManeuverCalculator as PyManeuverCalc, ManeuverPlan
 from engine.core.conjunction import ConjunctionWarning
-from engine.constants import MU, RE, INITIAL_FUEL, DRY_MASS
+from engine.constants import MU, RE
 import numpy as np
 
 # Try loading C++ / CUDA module
@@ -196,60 +194,6 @@ def bench_conjunction(n: int, lookahead: float = 3600.0, step: float = 60.0) -> 
     return r
 
 
-def bench_fuel(iters: int) -> BenchResult:
-    r = BenchResult(f"Fuel calculation ({iters:,} iters)")
-    dv = [0.1, 0.2, 0.3]
-
-    def py():
-        t = PyFuelTracker(INITIAL_FUEL)
-        for _ in range(iters): t.calculate_fuel_cost(dv)
-    r.py_s = _t(py)
-    r.np_s = None  # no numpy path
-
-    if _HAS_CPP:
-        def cpp():
-            t = _cpp.FuelTracker(INITIAL_FUEL, DRY_MASS)
-            for _ in range(iters): t.calculate_fuel_cost(dv)
-        r.cpp_s = _t(cpp)
-
-    return r
-
-
-def bench_maneuver(iters: int) -> BenchResult:
-    r = BenchResult(f"Maneuver calculation ({iters:,} iters)")
-    if _HAS_CPP:
-        w = _cpp.ConjunctionWarning()
-        w.sat_id = 0
-        w.debris_id = 1
-        w.current_distance = 5.0
-        w.time_to_closest_approach = 3600.0
-        w.severity = "WARNING"
-        w.relative_velocity = [0.1, 0.2, 0.3]
-    else:
-        w = ConjunctionWarning(
-            sat_id=0, debris_id=1, current_distance=5.0,
-            time_to_closest_approach=3600.0, severity="WARNING",
-            relative_velocity=[0.1, 0.2, 0.3])
-
-    def py():
-        calc = PyManeuverCalc()
-        # If we have C++ warning, we might need a Python one for the Python calculator
-        py_w = w
-        if _HAS_CPP:
-             py_w = ConjunctionWarning(
-                sat_id=w.sat_id, debris_id=w.debris_id, current_distance=w.current_distance,
-                time_to_closest_approach=w.time_to_closest_approach, severity=w.severity,
-                relative_velocity=list(w.relative_velocity))
-        for _ in range(iters): calc.calculate(ISS_STATE, py_w)
-    r.py_s = _t(py)
-    if _HAS_CPP:
-        calc = _cpp.ManeuverCalculator()
-        def cpp():
-            for _ in range(iters): calc.calculate(ISS_STATE, w)
-        r.cpp_s = _t(cpp)
-    return r
-
-
 # ── Report ────────────────────────────────────────────────────────────────────
 
 def print_header():
@@ -303,10 +247,10 @@ def main(quick: bool = False):
 
     if quick:
         configs = dict(single_iters=5_000, batch_n=200, batch_steps=100,
-                       conj_n=50, fuel_iters=10_000, man_iters=1_000)
+                       conj_n=50)
     else:
         configs = dict(single_iters=50_000, batch_n=1_000, batch_steps=864,
-                       conj_n=200, fuel_iters=100_000, man_iters=10_000)
+                       conj_n=200)
 
     for fn, args in [
         (bench_single_propagation, (configs['single_iters'],)),
@@ -314,8 +258,6 @@ def main(quick: bool = False):
         (bench_batch_propagation,  (configs['batch_n']*5, configs['batch_steps'])),
         (bench_conjunction,        (configs['conj_n'],)),
         (bench_conjunction,        (configs['conj_n']*2, 7200.0, 60.0)),
-        (bench_fuel,               (configs['fuel_iters'],)),
-        (bench_maneuver,           (configs['man_iters'],)),
     ]:
         r = fn(*args)
         results.append(r)

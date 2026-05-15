@@ -36,9 +36,7 @@ find_package(pybind11 REQUIRED)
 # ── Source files ──────────────────────────────────────────────────────────────
 set(CPP_SOURCES
     propagator.cpp
-    fuel.cpp
     conjunction.cpp
-    maneuver.cpp
 )
 
 if(HAS_CUDA)

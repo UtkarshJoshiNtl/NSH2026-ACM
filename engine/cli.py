@@ -1,105 +1,115 @@
 """
-astrosis/cli.py — Astrosis CLI implementation
-==============================================
+engine/cli.py — Astrosis CLI
+=============================
+Demo commands: fetch, propagate, conjunction
 """
 
 import argparse
 import sys
 import logging
-import json
-from datetime import datetime, timezone
+import math
 
 from .io.data import tle_ingestor
-from .simulation import SimulationContext
-from .geo.analysis import report_passes
+from .core.propagator import rk4_step
+from .core.conjunction import ConjunctionDetector
+from .constants import MU, RE
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("Astrosis")
 
-def main():
-    parser = argparse.ArgumentParser(description="Astrosis Orbital Simulator & Analysis Engine")
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Command: fetch
-    fetch_parser = subparsers.add_parser("fetch", help="Fetch and cache TLE data")
-    fetch_parser.add_argument("--id", type=str, help="Specific NORAD ID to fetch")
-    fetch_parser.add_argument("--force", action="store_true", help="Force refresh from CelesTrak bypassing cache")
+def _cmd_fetch(args):
+    logger.info(f"Fetching TLE data (ID={args.id if args.id else 'active constellation'})")
+    satellites = tle_ingestor.get_satellites(satellite_id=args.id, force_refresh=args.force)
+    logger.info(f"Successfully processed {len(satellites)} TLE entries.")
 
-    # Command: run
-    run_parser = subparsers.add_parser("run", help="Run simulation propagation")
-    run_parser.add_argument("--steps", type=int, default=100, help="Number of propagation steps")
-    run_parser.add_argument("--dt", type=float, default=60.0, help="Time step in seconds")
-    
-    # Command: passes
-    passes_parser = subparsers.add_parser("passes", help="Predict satellite passes for a ground station")
-    passes_parser.add_argument("--id", type=int, required=True, help="NORAD ID of satellite")
-    passes_parser.add_argument("--lat", type=float, required=True, help="Ground station latitude (deg)")
-    passes_parser.add_argument("--lon", type=float, required=True, help="Ground station longitude (deg)")
-    passes_parser.add_argument("--alt", type=float, default=0.0, help="Ground station altitude (km)")
-    passes_parser.add_argument("--hours", type=float, default=24.0, help="Hours to simulate")
-    passes_parser.add_argument("--output", type=str, help="Output JSON file for results")
-    passes_parser.add_argument("--area", type=float, default=10.0, help="Satellite cross-section area in m² (drag, default 10 m²)")
-    passes_parser.add_argument("--mass", type=float, default=1000.0, help="Satellite mass in kg (drag, default 1000 kg)")
-    passes_parser.add_argument("--cd", type=float, default=2.2, help="Drag coefficient (default 2.2)")
-    
-    args = parser.parse_args()
 
-    if args.command == "fetch":
-        logger.info(f"Fetching TLE data (ID={args.id if args.id else 'active constellation'})")
-        satellites = tle_ingestor.get_satellites(satellite_id=args.id, force_refresh=args.force)
-        logger.info(f"Successfully processed {len(satellites)} TLE entries.")
-        
-    elif args.command == "run":
-        logger.info(f"Initializing simulation context with {args.steps} steps (dt={args.dt}s)")
-        ctx = SimulationContext(start_time=0.0)
-        
-        # Load TLEs (we assume they are fetched already, or fetch active lazily)
-        satellites = tle_ingestor.get_satellites(force_refresh=False)
-        logger.info(f"Loaded {len(satellites)} satellites.")
-        
-        # We need SGP4 initialization & ECI propagation logic to be connected.
-        logger.info("Starting integration...")
-        
-        for step in range(args.steps):
-            ctx.advance_time(args.dt)
-            if step % max(1, args.steps // 10) == 0:
-                logger.info(f"Step {step}/{args.steps} (t={ctx.simulation_time:.1f}s)")
-                
-        logger.info("Simulation completed.")
-        
-    elif args.command == "passes":
-        # Use timezone-aware UTC time, then strip tzinfo to keep naïve UTC convention
-        start_dt = datetime.now(timezone.utc).replace(tzinfo=None)
-        logger.info(f"Predicting passes for {args.id} from {start_dt.isoformat()}Z for {args.hours} hours.")
-        
-        result = report_passes(
-            norad_id=args.id,
-            lat=args.lat,
-            lon=args.lon,
-            alt=args.alt,
-            start_dt=start_dt,
-            hours=args.hours,
-            sat_area=args.area,
-            sat_mass=args.mass,
-            sat_cd=args.cd,
+def _cmd_propagate(args):
+    line1 = "1 25544U 98067A   25135.54166667  .00007700  00000+0  14217-3 0  9994"
+    line2 = "2 25544  51.6412 227.8960 0002170 183.9820 176.1230 15.49534348505800"
+
+    from sgp4.api import Satrec, jday
+    sat = Satrec.twoline2rv(line1, line2)
+    jd, jf = jday(2025, 5, 15, 12, 0, 0)
+    err, r, v = sat.sgp4(jd, jf)
+    if err:
+        logger.error(f"SGP4 error {err}")
+        sys.exit(1)
+    state = list(r) + list(v)
+
+    dt = args.dt
+    steps = args.steps
+    curr = tuple(state)
+    e0 = 0.5 * sum(v * v for v in curr[3:]) - MU / math.sqrt(sum(x * x for x in curr[:3]))
+    max_drift = 0.0
+    for i in range(steps):
+        curr = rk4_step(curr, dt)
+        if i % max(1, steps // 20) == 0:
+            ei = 0.5 * sum(x * x for x in curr[3:]) - MU / math.sqrt(sum(x * x for x in curr[:3]))
+            max_drift = max(max_drift, abs((ei - e0) / e0))
+
+    logger.info(f"Propagated ISS for {steps} steps (dt={dt}s, total={steps * dt:.0f}s)")
+    logger.info(f"  Final state: x={curr[0]:.2f} y={curr[1]:.2f} z={curr[2]:.2f} km")
+    logger.info(f"  Final velocity: vx={curr[3]:.4f} vy={curr[4]:.4f} vz={curr[5]:.4f} km/s")
+    logger.info(f"  Max energy drift: {max_drift:.2e} (target < 1e-5)")
+
+
+def _cmd_conjunction(args):
+    detector = ConjunctionDetector()
+
+    def orbit(alt, inc_deg):
+        r = RE + alt
+        v = math.sqrt(MU / r)
+        inc = math.radians(inc_deg)
+        return [r, 0.0, 0.0, 0.0, v * math.cos(inc), v * math.sin(inc)]
+
+    sats = [orbit(400.0, 0.0)]
+    deb = [orbit(400.05, 0.0)]
+    sats[0][0] = -sats[0][0]
+    deb[0][0] = -deb[0][0]
+    deb[0][4] += 0.001
+
+    warns = detector.detect(sats, deb, lookahead_s=args.lookahead, step_s=args.step)
+    if not warns:
+        logger.info("No conjunctions detected.")
+        return
+
+    for w in warns:
+        logger.info(
+            f"Conjunction: sat={w.sat_id} debris={w.debris_id} "
+            f"distance={w.current_distance:.4f} km "
+            f"TCA={w.time_to_closest_approach:.1f}s "
+            f"severity={w.severity}"
         )
-        
-        if "error" in result:
-            logger.error(f"Error: {result['error']}")
-            sys.exit(1)
-            
-        logger.info(f"Found {len(result.get('passes', []))} passes.")
-        
-        if args.output:
-            with open(args.output, "w", encoding="utf-8") as f:
-                json.dump(result, f, indent=2)
-            logger.info(f"Wrote pass report to {args.output}")
-        else:
-            print(json.dumps(result, indent=2))
-        
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Astrosis — GPU-Accelerated Orbital Propagation Engine")
+    sub = parser.add_subparsers(dest="command")
+
+    fetch_p = sub.add_parser("fetch", help="Fetch and cache TLE data")
+    fetch_p.add_argument("--id", type=str, help="NORAD ID")
+    fetch_p.add_argument("--force", action="store_true", help="Force refresh")
+
+    prop_p = sub.add_parser("propagate", help="Propagate ISS for N steps")
+    prop_p.add_argument("--steps", type=int, default=8640, help="Number of steps")
+    prop_p.add_argument("--dt", type=float, default=10.0, help="Step size (s)")
+
+    conj_p = sub.add_parser("conjunction", help="Demo conjunction screening")
+    conj_p.add_argument("--lookahead", type=float, default=3600.0, help="Lookahead (s)")
+    conj_p.add_argument("--step", type=float, default=60.0, help="Sweep step (s)")
+
+    args = parser.parse_args()
+    if args.command == "fetch":
+        _cmd_fetch(args)
+    elif args.command == "propagate":
+        _cmd_propagate(args)
+    elif args.command == "conjunction":
+        _cmd_conjunction(args)
     else:
         parser.print_help()
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

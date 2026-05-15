@@ -1,11 +1,11 @@
-# CMake
-backend/cpp/build/
+# CMake build
+cpp/build/
 
 # Python
 venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # OS
 .DS_Store
-cpp/build/

@@ -10,8 +10,7 @@ from importlib import import_module
 
 from .constants import (
     MU, RE, J2, J3, J4, OMEGA_EARTH, MU_SUN, MU_MOON,
-    F_WGS84, E2_WGS84, ISP, G0, G0_KM, DRY_MASS, INITIAL_FUEL,
-    MAX_DV, COOLDOWN_S, CRITICAL_DISTANCE, WARNING_DISTANCE, ADVISORY_DISTANCE,
+    F_WGS84, E2_WGS84, CRITICAL_DISTANCE, WARNING_DISTANCE, ADVISORY_DISTANCE,
     RS_SUN, AU, P_SR,
 )
 from .simulation import SimulationContext
@@ -19,8 +18,7 @@ from .simulation import SimulationContext
 __all__ = [
     "SimulationContext",
     "MU", "RE", "J2", "J3", "J4", "OMEGA_EARTH", "MU_SUN", "MU_MOON",
-    "F_WGS84", "E2_WGS84", "ISP", "G0", "G0_KM", "DRY_MASS", "INITIAL_FUEL",
-    "MAX_DV", "COOLDOWN_S", "CRITICAL_DISTANCE", "WARNING_DISTANCE",
+    "F_WGS84", "E2_WGS84", "CRITICAL_DISTANCE", "WARNING_DISTANCE",
     "ADVISORY_DISTANCE", "RS_SUN", "AU", "P_SR",
 ]
 
@@ -30,9 +28,6 @@ _LAZY_EXPORTS = {
     "propagate_batch_numpy": (".core", "propagate_batch_numpy"),
     "ConjunctionDetector": (".core", "ConjunctionDetector"),
     "ConjunctionWarning": (".core", "ConjunctionWarning"),
-    "ManeuverCalculator": (".core", "ManeuverCalculator"),
-    "ManeuverPlan": (".core", "ManeuverPlan"),
-    "FuelTracker": (".core", "FuelTracker"),
     "propagate": (".core", "propagate"),
     "propagate_batch": (".core", "propagate_batch"),
     "detect_conjunctions": (".core", "detect_conjunctions"),
@@ -44,10 +39,9 @@ _LAZY_EXPORTS = {
     "ecef_to_geodetic": (".geo", "ecef_to_geodetic"),
     "geodetic_to_ecef": (".geo", "geodetic_to_ecef"),
     "topocentric_aer": (".geo", "topocentric_aer"),
-    "sun_position_eci": (".geo", "sun_position_eci"),
-    "check_eclipse": (".geo", "check_eclipse"),
-    "is_optically_visible": (".geo", "is_optically_visible"),
-    "report_passes": (".geo", "report_passes"),
+    # NOTE: geo/visibility exports sun_position_eci, check_eclipse, is_optically_visible
+    # but they are unused since analysis.py was removed. Core ephemeris module provides
+    # the sun/moon positions used by the propagator (via core_sun_position_eci).
     "tle_ingestor": (".io", "tle_ingestor"),
     "TLEIngestor": (".io", "TLEIngestor"),
 }

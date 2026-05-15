@@ -19,15 +19,6 @@ MU_MOON = 4902.800066   # Moon gravitational parameter   [km³/s²]
 F_WGS84  = 1.0 / 298.257223563
 E2_WGS84 = 2 * F_WGS84 - F_WGS84 ** 2
 
-# ── Propulsion ───────────────────────────────────────────────────────────────
-ISP          = 300.0    # Specific impulse              [s]
-G0           = 9.80665  # Standard gravity              [m/s²]
-G0_KM        = G0 / 1000.0  # Standard gravity         [km/s²]
-DRY_MASS     = 500.0    # Default satellite dry mass    [kg]
-INITIAL_FUEL = 50.0     # Default propellant load       [kg]
-MAX_DV       = 0.015    # Maximum single-burn ΔV        [km/s]
-COOLDOWN_S   = 600.0    # Thermal cooldown between burns [s]
-
 # ── Conjunction Thresholds ───────────────────────────────────────────────────
 CRITICAL_DISTANCE = 0.1   # CRITICAL warning threshold  [km]
 WARNING_DISTANCE  = 1.0   # WARNING threshold            [km]

@@ -7,9 +7,7 @@
  */
 
 #include "propagator.h"
-#include "fuel.h"
 #include "conjunction.h"
-#include "maneuver.h"
 #include "cuda_bridge.h"
 #include <cmath>
 #include <algorithm>
@@ -358,21 +356,7 @@ void Propagator::batch_propagate_full_history(
 
 // ── pybind11 bindings ─────────────────────────────────────────────────────────
 PYBIND11_MODULE(physics_engine, m) {
-    m.doc() = "Astrosis Physics Engine — J2/J3/J4 propagator, fuel, conjunction, maneuver";
-
-    // FuelTracker
-    py::class_<FuelTracker>(m, "FuelTracker")
-        .def(py::init<double, double>(),
-             py::arg("initial_fuel") = INITIAL_FUEL,
-             py::arg("dry_mass")     = DRY_MASS)
-        .def("current_mass",        &FuelTracker::current_mass)
-        .def("fuel_percentage",     &FuelTracker::fuel_percentage)
-        .def("is_critical",         &FuelTracker::is_critical)
-        .def("is_empty",            &FuelTracker::is_empty)
-        .def("calculate_fuel_cost", &FuelTracker::calculate_fuel_cost)
-        .def("apply_burn",          &FuelTracker::apply_burn)
-        .def_readwrite("fuel_kg",   &FuelTracker::fuel_kg)
-        .def_readwrite("dry_mass",  &FuelTracker::dry_mass);
+    m.doc() = "Astrosis Physics Engine — J2/J3/J4 propagator, conjunction analysis";
 
     // Propagator
     py::class_<Propagator>(m, "Propagator")
@@ -472,29 +456,7 @@ PYBIND11_MODULE(physics_engine, m) {
             }
         }, py::arg("sat_states"), py::arg("debris_states"),
            py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0,
-           py::arg("tle_age_days") = 1.0);
-
-    // ManeuverPlan
-    py::class_<ManeuverPlan>(m, "ManeuverPlan")
-        .def(py::init<>())
-        .def_readwrite("evasion_dv_eci",       &ManeuverPlan::evasion_dv_eci)
-        .def_readwrite("recovery_dv_eci",      &ManeuverPlan::recovery_dv_eci)
-        .def_readwrite("fuel_cost_kg",         &ManeuverPlan::fuel_cost_kg)
-        .def_readwrite("burn_timing_offset_s", &ManeuverPlan::burn_timing_offset_s)
-        .def("__repr__", [](const ManeuverPlan& p) {
-            auto& e = p.evasion_dv_eci; auto& r = p.recovery_dv_eci;
-            double em = std::sqrt(e[0]*e[0]+e[1]*e[1]+e[2]*e[2]);
-            double rm = std::sqrt(r[0]*r[0]+r[1]*r[1]+r[2]*r[2]);
-            return "<ManeuverPlan evasion=" + std::to_string(em)
-                 + " km/s recovery=" + std::to_string(rm)
-                 + " km/s fuel=" + std::to_string(p.fuel_cost_kg) + " kg>";
-        });
-
-    // ManeuverCalculator
-    py::class_<ManeuverCalculator>(m, "ManeuverCalculator")
-        .def(py::init<>())
-        .def("calculate", &ManeuverCalculator::calculate,
-             py::arg("sat_state"), py::arg("warning"));
+            py::arg("tle_age_days") = 1.0);
 
     // ── CUDA GPU Acceleration (Optional) ─────────────────────────────────────
     m.def("cuda_available", &cuda_available, "Returns true if an NVIDIA GPU is found.");

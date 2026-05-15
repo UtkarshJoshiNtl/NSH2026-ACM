@@ -15,12 +15,10 @@ Run:
 import math
 import subprocess
 import sys
-import types
 import pytest
 import numpy as np
 
 from engine.core.propagator import rk4_step
-from engine.core.fuel import FuelTracker
 from engine.constants import MU, RE, J2, CRITICAL_DISTANCE, WARNING_DISTANCE, ADVISORY_DISTANCE
 from engine.core.accelerator import (
     propagate,
@@ -263,32 +261,6 @@ def test_python_conjunction_scans_partial_final_window(monkeypatch):
     assert warns, "Expected advisory warning in the partial final interval"
     assert warns[0].time_to_closest_approach > 60.0
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. Fuel — non-default initial load
-# ─────────────────────────────────────────────────────────────────────────────
-
-def test_fuel_non_default_load():
-    """
-    FuelTracker initialized with 25 kg must report 100% (not 50%) at init.
-    This was the hardcoded INITIAL_FUEL bug: fuel_percentage() divided by the
-    constant (50 kg) instead of the instance's initial value.
-    """
-    tracker = FuelTracker(initial_fuel=25.0, dry_mass=500.0)
-    pct = tracker.fuel_percentage()
-    assert abs(pct - 100.0) < 0.001, (
-        f"Expected 100% for freshly initialized tracker with 25 kg, got {pct:.2f}%"
-    )
-
-
-def test_fuel_depletion_tracking():
-    """After burning 12.5 kg, a 25 kg tracker must report 50%."""
-    tracker = FuelTracker(initial_fuel=25.0, dry_mass=500.0)
-    tracker.fuel_kg -= 12.5
-    pct = tracker.fuel_percentage()
-    assert abs(pct - 50.0) < 0.001, f"Expected 50% after half fuel used, got {pct:.2f}%"
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Batch Propagation Equivalence
 # ─────────────────────────────────────────────────────────────────────────────
@@ -351,7 +323,7 @@ def test_cpp_incremental_propagation():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Backend Availability
+# 5. Backend Availability
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_backend_info_returns_dict():
@@ -386,44 +358,4 @@ def test_engine_core_import_is_lazy():
     assert result.stdout.strip() == "False"
 
 
-def test_report_passes_converts_teme_initial_state(monkeypatch):
-    from engine.geo import analysis
 
-    calls = []
-
-    def fake_teme_to_eci(r_teme, v_teme, dt):
-        calls.append((r_teme, v_teme, dt))
-        return np.array([1.0, 2.0, 3.0]), np.array([0.1, 0.2, 0.3])
-
-    class FakeSatrec:
-        @classmethod
-        def twoline2rv(cls, _line1, _line2):
-            return cls()
-
-        def sgp4(self, _jd, _jdfrac):
-            return 0, [7000.0, 0.0, 0.0], [0.0, 7.5, 0.0]
-
-    fake_sgp4 = types.ModuleType("sgp4")
-    fake_api = types.ModuleType("sgp4.api")
-    fake_api.Satrec = FakeSatrec
-    fake_api.jday = lambda *_args: (2451545.0, 0.0)
-
-    class FakeIngestor:
-        def get_satellites(self, **_kwargs):
-            return [{
-                "satellite_name": "TESTSAT",
-                "line1": "1 00000U 00000A   25001.00000000  .00000000  00000+0  00000+0 0  0000",
-                "line2": "2 00000   0.0000   0.0000 0000000   0.0000   0.0000  1.00000000    00",
-            }]
-
-    monkeypatch.setitem(sys.modules, "sgp4", fake_sgp4)
-    monkeypatch.setitem(sys.modules, "sgp4.api", fake_api)
-    monkeypatch.setattr(analysis, "_teme_to_eci", fake_teme_to_eci)
-
-    result = analysis.report_passes(
-        0, 0.0, 0.0, 0.0, start_dt=__import__("datetime").datetime(2025, 1, 1),
-        hours=0.0, ingestor=FakeIngestor()
-    )
-
-    assert result["satellite"] == "TESTSAT"
-    assert len(calls) == 1

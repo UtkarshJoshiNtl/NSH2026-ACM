@@ -13,12 +13,8 @@ import logging
 from typing import List, Optional
 import numpy as np
 
-from ..constants import DRY_MASS, INITIAL_FUEL
-
 # Python fallbacks
 from .propagator import rk4_step, propagate_batch_numpy
-from .fuel import FuelTracker as PyFuelTracker
-from .maneuver import ManeuverCalculator as PyManeuverCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +50,6 @@ _CPP_SINGLE_ENABLED = _HAS_CPP
 _CPP_BATCH_ENABLED = _HAS_BATCH_CPP
 _CPP_HISTORY_ENABLED = _HAS_BATCH_CPP
 _CPP_CONJUNCTION_ENABLED = _HAS_CPP
-_CPP_FUEL_ENABLED = _HAS_CPP
-_CPP_MANEUVER_ENABLED = _HAS_CPP
 
 if _HAS_CUDA:
     logger.info("Backend: CUDA GPU acceleration active")
@@ -72,7 +66,7 @@ def backend_info() -> dict:
     cuda_active = _CUDA_BATCH_ENABLED or _CUDA_HISTORY_ENABLED or _CUDA_CONJUNCTION_ENABLED
     cpp_active = (
         _CPP_SINGLE_ENABLED or _CPP_BATCH_ENABLED or _CPP_HISTORY_ENABLED
-        or _CPP_CONJUNCTION_ENABLED or _CPP_FUEL_ENABLED or _CPP_MANEUVER_ENABLED
+        or _CPP_CONJUNCTION_ENABLED
     )
     if cuda_active:
         active = "cuda"
@@ -261,38 +255,3 @@ def detect_conjunctions(sat_states: list, debris_states: list,
     return detector.detect(sat_states, debris_states,
                             lookahead_s=lookahead, step_s=step_s, mjd0=mjd0)
 
-
-# ── Fuel & maneuver ───────────────────────────────────────────────────────────
-
-def compute_fuel_used(delta_v: list, fuel_kg: float = INITIAL_FUEL) -> float:
-    global _CPP_FUEL_ENABLED
-    if _CPP_FUEL_ENABLED:
-        try:
-            return _physics.FuelTracker(fuel_kg, DRY_MASS).calculate_fuel_cost(delta_v)
-        except Exception as e:
-            _CPP_FUEL_ENABLED = False
-            logger.warning(f"C++ compute_fuel_used failed: {e}. Disabling C++ fuel calculations for this process.")
-    return PyFuelTracker(fuel_kg).calculate_fuel_cost(delta_v)
-
-
-def calculate_maneuver(sat_state: list, warning) -> dict:
-    global _CPP_MANEUVER_ENABLED
-    if _CPP_MANEUVER_ENABLED:
-        try:
-            p = _physics.ManeuverCalculator().calculate(sat_state, warning)
-            return {
-                "evasion_dv":   list(p.evasion_dv_eci),
-                "recovery_dv":  list(p.recovery_dv_eci),
-                "fuel_cost_kg": p.fuel_cost_kg,
-                "burn_timing_offset_s": p.burn_timing_offset_s,
-            }
-        except Exception as e:
-            _CPP_MANEUVER_ENABLED = False
-            logger.warning(f"C++ calculate_maneuver failed: {e}. Disabling C++ maneuver calculations for this process.")
-    p = PyManeuverCalculator().calculate(sat_state, warning)
-    return {
-        "evasion_dv":   p.evasion_dv_eci,
-        "recovery_dv":  p.recovery_dv_eci,
-        "fuel_cost_kg": p.fuel_cost_kg,
-        "burn_timing_offset_s": p.burn_timing_offset_s,
-    }
