@@ -45,4 +45,9 @@ std::vector<ConjunctionWarning> cuda_detect_conjunctions(
     const double* sat_states, int ns,
     const double* debris_states, int nd,
     double lookahead_s, double step_s, double mjd0);
+
+double cuda_monte_carlo_pc(
+    const double* sat_samples, 
+    const double* deb_samples,
+    int n, double dt, int steps, double threshold_km, double mjd0);
 #endif

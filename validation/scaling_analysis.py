@@ -47,7 +47,7 @@ try:
 except ImportError:
     _cpp = None; HAS_CPP = False; HAS_CUDA = False; HAS_BATCH = False
 
-from engine.physics.propagator import propagate_batch_numpy
+from engine.core.propagator import propagate_batch_numpy
 from engine.constants import RE
 
 DT    = 10.0   # step size [s]

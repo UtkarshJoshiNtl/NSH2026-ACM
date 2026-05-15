@@ -569,5 +569,16 @@ PYBIND11_MODULE(physics_engine, m) {
         }
     }, py::arg("sat_states"), py::arg("debris_states"),
        py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0, py::arg("mjd0") = 0.0);
+
+    m.def("cuda_monte_carlo_pc", [](py::array_t<double> sat_samples, py::array_t<double> deb_samples,
+                                    double dt, int steps, double threshold, double mjd0) {
+        auto b_sat = sat_samples.request(); auto b_deb = deb_samples.request();
+        int n = (int)b_sat.shape[0];
+        {
+            py::gil_scoped_release release;
+            return cuda_monte_carlo_pc((double*)b_sat.ptr, (double*)b_deb.ptr, n, dt, steps, threshold, mjd0);
+        }
+    }, py::arg("sat_samples"), py::arg("deb_samples"), 
+       py::arg("dt"), py::arg("steps"), py::arg("threshold_km"), py::arg("mjd0") = 0.0);
 #endif
 }

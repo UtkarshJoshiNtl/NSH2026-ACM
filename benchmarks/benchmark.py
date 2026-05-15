@@ -24,15 +24,15 @@ from typing import Optional, List, Tuple
 
 logging.basicConfig(level=logging.WARNING)
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'cpp', 'build'))
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cpp', 'build')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # ── Import backends directly so we can force each one ────────────────────────
-from engine.physics.propagator import rk4_step, propagate_batch_numpy
-from engine.physics.conjunction import ConjunctionDetector as PyDetector
-from engine.physics.fuel import FuelTracker as PyFuelTracker
-from engine.physics.maneuver import ManeuverCalculator as PyManeuverCalc, ManeuverPlan
-from engine.physics.conjunction import ConjunctionWarning
+from engine.core.propagator import rk4_step, rk4_batch, propagate_batch_numpy
+from engine.core.conjunction import ConjunctionDetector as PyDetector
+from engine.core.fuel import FuelTracker as PyFuelTracker
+from engine.core.maneuver import ManeuverCalculator as PyManeuverCalc, ManeuverPlan
+from engine.core.conjunction import ConjunctionWarning
 from engine.constants import MU, RE, INITIAL_FUEL, DRY_MASS
 import numpy as np
 
@@ -107,10 +107,7 @@ def bench_single_propagation(iters: int) -> BenchResult:
     # NumPy (batch of 1)
     arr = np.array([ISS_STATE])
     def np_fn():
-        a = arr.copy()
-        for _ in range(iters):
-            from engine.physics.propagator import rk4_batch
-            a = rk4_batch(a, 10.0)
+        rk4_batch(arr, 10.0, iters)
     r.np_s = _t(np_fn)
 
     # C++
@@ -153,18 +150,22 @@ def bench_batch_propagation(n: int, steps: int) -> BenchResult:
     if _HAS_CUDA:
         arr_cuda = np.array(sats, dtype=np.float64)
         
-        # Measure purely the PCIe transfer overhead by executing 0 steps
-        start = time.perf_counter()
-        _cpp.cuda_propagate_batch(arr_cuda, dt, 0)
-        transfer_overhead = time.perf_counter() - start
-
-        def cuda():
+        # 1. AoS
+        def cuda_aos():
             _cpp.cuda_propagate_batch(arr_cuda, dt, steps)
-            
-        raw_time = _t(cuda)
-        r.cuda_s = max(0.0001, raw_time - transfer_overhead)
-        r.note = "CUDA time excludes PCIe transfer"
-
+        r.cuda_s = _t(cuda_aos)
+        
+        # 2. SoA (for note)
+        def cuda_soa():
+            _cpp.cuda_propagate_batch_soa(arr_cuda, dt, steps)
+        t_soa = _t(cuda_soa)
+        
+        # 3. Streamed
+        def cuda_stream():
+            _cpp.cuda_propagate_batch_streamed(arr_cuda, dt, steps)
+        t_stream = _t(cuda_stream)
+        
+        r.note = f"AoS: {r.cuda_s*1000:.1f}ms | SoA: {t_soa*1000:.1f}ms | Stream: {t_stream*1000:.1f}ms"
     return r
 
 

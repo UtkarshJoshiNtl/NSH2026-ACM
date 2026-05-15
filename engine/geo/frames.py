@@ -7,7 +7,7 @@ and Topocentric (Observer-based) frames.
 
 import numpy as np
 from datetime import datetime
-from .constants import RE, F_WGS84, E2_WGS84
+from ..constants import RE, F_WGS84, E2_WGS84
 
 def gmst_from_datetime(dt: datetime) -> float:
     """

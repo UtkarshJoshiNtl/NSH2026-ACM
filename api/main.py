@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import logging
 
-from engine.physics.accelerator import (
+from engine.core.accelerator import (
     propagate as acc_propagate,
     propagate_batch,
     detect_conjunctions,
@@ -80,7 +80,7 @@ def propagate_single(req: PropagateRequest):
     """
     try:
         total = req.steps * req.dt_seconds
-        from engine.physics.accelerator import propagate_steps
+        from engine.core.accelerator import propagate_steps
         final_state = propagate_steps(
             state=req.state,
             total_seconds=total,
@@ -189,7 +189,7 @@ def passes(norad_id: int, req: PassRequest):
     elevation above the horizon. Returns a list of rise/culmination/set events.
     """
     try:
-        from engine.analysis import report_passes
+        from engine.geo.analysis import report_passes
         result = report_passes(
             norad_id=norad_id,
             lat=req.lat,

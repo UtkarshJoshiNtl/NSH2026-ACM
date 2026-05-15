@@ -16,10 +16,10 @@ import math
 import pytest
 import numpy as np
 
-from engine.physics.propagator import rk4_step
-from engine.physics.fuel import FuelTracker
+from engine.core.propagator import rk4_step
+from engine.core.fuel import FuelTracker
 from engine.constants import MU, RE, J2, CRITICAL_DISTANCE, WARNING_DISTANCE, ADVISORY_DISTANCE
-from engine.physics.accelerator import (
+from engine.core.accelerator import (
     propagate,
     propagate_batch,
     detect_conjunctions,

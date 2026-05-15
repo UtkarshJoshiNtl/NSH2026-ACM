@@ -239,6 +239,66 @@ static void run_streamed(double* s, int n, double dt, int steps, double mjd0){
     cudaFree(d0); cudaFree(d1);
 }
 
+// ── Monte Carlo Conjunction Kernel ───────────────────────────────────────────
+__global__ void k_monte_carlo(
+    const double* __restrict__ sat_samples,
+    const double* __restrict__ deb_samples,
+    int n, double dt, int steps, double threshold_km,
+    int* __restrict__ collision_count, double mjd0)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    double sx = sat_samples[i*6+0], sy = sat_samples[i*6+1], sz = sat_samples[i*6+2];
+    double svx = sat_samples[i*6+3], svy = sat_samples[i*6+4], svz = sat_samples[i*6+5];
+    
+    double dx = deb_samples[i*6+0], dy = deb_samples[i*6+1], dz = deb_samples[i*6+2];
+    double dvx = deb_samples[i*6+3], dvy = deb_samples[i*6+4], dvz = deb_samples[i*6+5];
+
+    double min_dist = 1e15;
+
+    for (int st = 0; st < steps; ++st) {
+        double rx = sx - dx, ry = sy - dy, rz = sz - dz;
+        double d2 = rx*rx + ry*ry + rz*rz;
+        if (d2 < min_dist) min_dist = d2;
+
+        // Propagate both
+        rk4_step_device(sx, sy, sz, svx, svy, svz, dt, false, 0, 1, 0, 1.5, mjd0, st);
+        rk4_step_device(dx, dy, dz, dvx, dvy, dvz, dt, false, 0, 1, 0, 1.5, mjd0, st);
+    }
+
+    if (sqrt(min_dist) < threshold_km) {
+        atomicAdd(collision_count, 1);
+    }
+}
+
+double cuda_monte_carlo_pc(
+    const double* sat_samples, 
+    const double* deb_samples,
+    int n, double dt, int steps, double threshold_km, double mjd0) 
+{
+    double *d_sat, *d_deb;
+    int *d_count;
+    int h_count = 0;
+
+    CUDA_CHECK(cudaMalloc(&d_sat, n * 6 * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_deb, n * 6 * sizeof(double)));
+    CUDA_CHECK(cudaMalloc(&d_count, sizeof(int)));
+
+    CUDA_CHECK(cudaMemcpy(d_sat, sat_samples, n * 6 * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_deb, deb_samples, n * 6 * sizeof(double), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(d_count, 0, sizeof(int)));
+
+    int blk = 256;
+    k_monte_carlo<<<(n + blk - 1) / blk, blk>>>(d_sat, d_deb, n, dt, steps, threshold_km, d_count, mjd0);
+    
+    CUDA_CHECK(cudaMemcpy(&h_count, d_count, sizeof(int), cudaMemcpyDeviceToHost));
+
+    cudaFree(d_sat); cudaFree(d_deb); cudaFree(d_count);
+
+    return (double)h_count / n;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API (USE_CUDA guard)
 // ─────────────────────────────────────────────────────────────────────────────

@@ -27,8 +27,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-from engine.physics.propagator import rk4_step
-from engine.constants import MU, RE, J2
+from engine.core.propagator import rk4_step
+from engine.constants import MU, RE, J2, MU_SUN, MU_MOON
+
+# Try to import C++ backend for parity checks
+try:
+    import physics_engine as _cpp
+    _HAS_CPP = True
+except ImportError:
+    _HAS_CPP = False
 
 # ── Embedded ISS TLE (May 2025, epoch baked in so no network needed) ──────────
 ISS_LINE1 = "1 25544U 98067A   25135.54166667  .00007700  00000+0  14217-3 0  9994"
@@ -138,7 +145,7 @@ def test_sgp4_comparison():
     try:
         from sgp4.api import Satrec, jday
         from datetime import datetime, timedelta
-        from engine.analysis import _teme_to_eci
+        from engine.geo.analysis import _teme_to_eci
     except ImportError:
         print("  SKIP — sgp4 not installed\n")
         return True
@@ -160,15 +167,26 @@ def test_sgp4_comparison():
 
     r0_eci, v0_eci = _teme_to_eci(np.array(r0_teme), np.array(v0_teme), epoch_dt)
     state = list(r0_eci) + list(v0_eci)
-
+    # TLE epoch: May 15, 2025 13:00:00 UTC (Modified Julian Date approx 60810.54)
+    # We'll use a fixed MJD for this test to keep ephemeris deterministic
+    mjd0 = 60810.54166667
+    
     dt_s   = 60.0   # 1-minute steps
     hours  = 24
     n_steps = int(hours * 3600 / dt_s)
     times, errors = [], []
 
+    # Satellite properties for drag/SRP
+    area = 20.0   # m^2
+    mass = 450.0  # kg
+    cd   = 2.2
+    cr   = 1.5
+
     curr = tuple(state)
     for i in range(1, n_steps + 1):
-        curr = rk4_step(curr, dt_s)
+        # Include drag, SRP, and Lunisolar
+        curr = rk4_step(curr, dt_s, mjd0=mjd0, current_step=i-1, 
+                        area=area, mass=mass, cd=cd, cr=cr)
         t_s  = i * dt_s
         step_dt = epoch_dt + timedelta(seconds=t_s)
         jd2, jdf2 = jday(step_dt.year, step_dt.month, step_dt.day,
@@ -291,6 +309,74 @@ def test_raan_precession():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 5. SRP Trajectory Divergence
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_srp_divergence():
+    """
+    Solar Radiation Pressure (SRP) significantly affects objects with high 
+    area-to-mass ratios (e.g., debris vs. heavy satellites).
+    
+    We propagate two objects with same initial state but different area/mass:
+    1. Low Area/Mass: 0.01 m²/kg
+    2. High Area/Mass: 1.0 m²/kg
+    
+    Over 48 hours, they should diverge by several km. This proves the SRP model 
+    is active and physically coupled to the cross-section.
+    """
+    print("Test 5: SRP Trajectory Divergence...")
+    # High altitude to minimize drag (1000km)
+    a = RE + 1000.0
+    v_circ = math.sqrt(MU / a)
+    state0 = (a, 0.0, 0.0, 0.0, v_circ, 0.0)
+    
+    mjd0 = 60810.0
+    dt   = 60.0
+    hours = 48
+    steps = int(hours * 3600 / dt)
+    
+    # Propagate Low Area/Mass
+    curr_low = state0
+    # Propagate High Area/Mass
+    curr_high = state0
+    
+    # Object 1: Heavy (A/M = 1/1000 = 0.001)
+    # Object 2: Light/Big (A/M = 10/10 = 1.0)
+    
+    times, dists = [], []
+    for i in range(steps):
+        curr_low  = rk4_step(curr_low,  dt, mjd0=mjd0, current_step=i, area=1.0,  mass=1000.0, cd=0.0, cr=1.5)
+        curr_high = rk4_step(curr_high, dt, mjd0=mjd0, current_step=i, area=10.0, mass=10.0,   cd=0.0, cr=1.5)
+        
+        if i % 60 == 0:
+            dx = curr_low[0]-curr_high[0]
+            dy = curr_low[1]-curr_high[1]
+            dz = curr_low[2]-curr_high[2]
+            d = math.sqrt(dx*dx+dy*dy+dz*dz)
+            times.append(i * dt / 3600.0)
+            dists.append(d)
+            
+    final_div = dists[-1]
+    print(f"  Final divergence after 48h: {final_div:.2f} km")
+    # Expected divergence for 1.0 m^2/kg at 1000km over 2 days is > 500m to several km
+    status = "✓ PASS" if final_div > 0.5 else "✗ FAIL"
+    print(f"  Status: {status}")
+    
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(times, dists, color=ORANGE, label="Divergence (km)")
+    ax.set_xlabel("Time (hours)")
+    ax.set_ylabel("Position Difference (km)")
+    ax.set_title(f"SRP Induced Divergence (High vs Low Area-to-Mass Ratio)   {status}")
+    ax.grid(True)
+    fig.tight_layout()
+    path = os.path.join(PLOTS_DIR, "5_srp_divergence.png")
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved: {path}\n")
+    return final_div > 0.5
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 4. RK4 Convergence Order
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -388,6 +474,7 @@ if __name__ == "__main__":
         "SGP4 Comparison":     test_sgp4_comparison(),
         "RAAN Precession":     test_raan_precession(),
         "RK4 Convergence":     test_rk4_convergence(),
+        "SRP Divergence":      test_srp_divergence(),
     }
     elapsed = time.perf_counter() - t0
 

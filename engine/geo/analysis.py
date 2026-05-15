@@ -8,10 +8,10 @@ structured JSON reports and event logs.
 from datetime import datetime, timedelta
 import numpy as np
 
-from .data import tle_ingestor
+from ..io.data import tle_ingestor
 from .frames import eci_to_ecef, topocentric_aer, gmst_from_datetime
 from .visibility import is_optically_visible
-from .physics.accelerator import propagate_with_drag
+from ..core.accelerator import propagate_with_drag
 from sgp4.api import Satrec, jday
 
 

@@ -67,7 +67,7 @@ class SimulationContext:
             self.objects[obj.id] = obj
 
     def advance_time(self, dt_seconds: float) -> None:
-        from .physics.accelerator import propagate_batch
+        from .core.accelerator import propagate_batch
         
         sats = self.get_all_satellites()
         if not sats:
