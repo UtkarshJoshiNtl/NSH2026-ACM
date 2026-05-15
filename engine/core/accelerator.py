@@ -1,5 +1,5 @@
 """
-engine/physics/accelerator.py — Tiered Backend Bridge
+engine/core/accelerator.py — Tiered Backend Bridge
 ======================================================
 Priority: CUDA GPU → C++ CPU → NumPy Batch → Pure Python
 
@@ -143,9 +143,9 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
     if _HAS_CUDA:
         try:
             if with_drag:
-                res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd)
+                res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd, cr, mjd0)
             else:
-                res = _physics.cuda_propagate_batch(arr, dt_seconds, steps)
+                res = _physics.cuda_propagate_batch(arr, dt_seconds, steps, mjd0)
             return res.tolist()
         except Exception as e:
             logger.warning(f"CUDA propagate_batch failed: {e}. Falling back to C++.")
@@ -155,9 +155,9 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
         try:
             prop = _physics.Propagator()
             if with_drag:
-                res = prop.batch_propagate_steps_drag(arr, dt_seconds, steps, area, mass, cd)
+                res = prop.batch_propagate_steps_drag(arr, dt_seconds, steps, area, mass, cd, cr, mjd0)
             else:
-                res = prop.batch_propagate_steps(arr, dt_seconds, steps)
+                res = prop.batch_propagate_steps(arr, dt_seconds, steps, mjd0)
             return res.tolist()
         except Exception as e:
             logger.warning(f"C++ batch_propagate_steps failed: {e}. Falling back to NumPy.")

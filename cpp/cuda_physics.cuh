@@ -92,11 +92,11 @@ __device__ __forceinline__ void accel(
     ay += j2f * y * (5.0 * z2r2 - 1.0);
     az += j2f * z * (5.0 * z2r2 - 3.0);
     
-    double zr = z / rm;
+    // J3
     double j3f = 2.5 * C_J3 * C_MU * C_RE * C_RE * C_RE / r7;
-    ax += j3f * x * (7.0 * z2r2 * zr - 3.0 * zr);
-    ay += j3f * y * (7.0 * z2r2 * zr - 3.0 * zr);
-    az += j3f * (7.0 * z2r2 * zr * z - 6.0 * z2r2 + (3.0 / 5.0));
+    ax += j3f * x * (7.0 * z2r2 * z - 3.0 * z);
+    ay += j3f * y * (7.0 * z2r2 * z - 3.0 * z);
+    az += j3f * (7.0 * z2r2 * z * z - 6.0 * z * z + 0.6 * r2);
     
     double z4r4 = z2r2 * z2r2;
     double j4f = (5.0 / 8.0) * C_J4 * C_MU * C_RE * C_RE * C_RE * C_RE / r7;

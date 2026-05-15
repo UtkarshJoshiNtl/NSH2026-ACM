@@ -42,9 +42,9 @@ static double atmospheric_density(double alt_km) {
     for (int i = 0; i < ATMO_N - 1; ++i) {
         if (ATMO_TABLE[i].alt_base_km <= alt_km && alt_km < ATMO_TABLE[i+1].alt_base_km)
             return ATMO_TABLE[i].rho_base * std::exp(-(alt_km - ATMO_TABLE[i].alt_base_km)
-                                                       / ATMO_TABLE[i].scale_height_km);
+                                                        / ATMO_TABLE[i].scale_height_km);
     }
-    return ATMO_TABLE[0].rho_base * std::exp(-alt_km / ATMO_TABLE[0].scale_height_km);
+    return 0.0;
 }
 
 // ── Ephemeris ────────────────────────────────────────────────────────────────
@@ -116,11 +116,10 @@ std::array<double,3> Propagator::acceleration(const std::array<double,3>& r, dou
     az += j2f * z * (5.0 * z2_r2 - 3.0);
 
     // J3
-    double z_r   = z / rm;
     double j3f   = 2.5 * J3 * MU * RE * RE * RE / r7;
-    ax += j3f * x * (7.0 * z2_r2 * z_r - 3.0 * z_r);
-    ay += j3f * y * (7.0 * z2_r2 * z_r - 3.0 * z_r);
-    az += j3f * (7.0 * z2_r2 * z_r * z - 6.0 * z2_r2 + (3.0 / 5.0));
+    ax += j3f * x * (7.0 * z2_r2 * z - 3.0 * z);
+    ay += j3f * y * (7.0 * z2_r2 * z - 3.0 * z);
+    az += j3f * (7.0 * z2_r2 * z * z - 6.0 * z * z + 0.6 * r2);
 
     // J4
     double z4_r4 = z2_r2 * z2_r2;

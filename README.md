@@ -2,7 +2,7 @@
 
 [![Backend: CUDA](https://img.shields.io/badge/Backend-CUDA_12.9-76b900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![Backend: C++](https://img.shields.io/badge/Backend-C++20-00599C?logo=c%2B%2B)](https://isocpp.org/)
-[![Physics: RK4](https://img.shields.io/badge/Physics-RK4_High--Fi-ff69b4)](/DESIGN.md)
+[![Physics: RK4](https://img.shields.io/badge/Physics-RK4_High--Fi-ff69b4)](DESIGN.md)
 
 Astrosis is a high-performance orbital simulation and analysis engine designed for satellite situational awareness (SSA), mission planning, and research-grade conjunction assessment. It features a tiered acceleration architecture that automatically scales from pure Python to massively parallel CUDA kernels.
 
@@ -57,8 +57,15 @@ Astrosis is engineered for throughput. Below is a comparison of backends on an *
 | **Conjunction Detection** (100x100) | 518 ms | N/A | 231 ms (2.2×) | 37.4 ms (13.9×) |
 | **Monte Carlo $P_c$** (100k samples) | N/A | N/A | N/A | **< 1,000 ms** |
 
-> [!TIP]
 > The CUDA backend utilizes **SoA (Structure-of-Arrays)** memory layout, achieving **5.4× more throughput** than standard AoS layouts by ensuring 100% memory access coalescing for the RK4 kernel.
+
+### 📈 Performance Analysis
+| CUDA Roofline Model | CPU/GPU Crossover |
+| :---: | :---: |
+| ![Roofline](validation/plots/8_roofline.png) | ![Crossover](validation/plots/7_cuda_crossover.png) |
+| *Roofline analysis showing compute-bound FP64 regime* | *Throughput crossover at N≈300 satellites* |
+
+---
 
 ## 🧪 Physics Validation
 
@@ -68,6 +75,14 @@ We don't just claim accuracy; we prove it. The `validation/` suite performs:
 3. **SGP4 Comparison**: Quantifies divergence against industry standards (ISS TLE).
 4. **Convergence Order**: Proves exactly 4th-order behavior (error reductions of 16× per dt halving).
 5. **SRP Divergence**: Demonstrates physical coupling of trajectory to area-to-mass ratios.
+
+### 🧪 Physics Validation Results
+| Energy Conservation | SGP4 Comparison |
+| :---: | :---: |
+| ![Energy](validation/plots/1_energy_conservation.png) | ![SGP4](validation/plots/2_sgp4_comparison.png) |
+| *24h Energy error maintained below 1e-7* | *Cross-validation against ISS TLE baseline* |
+
+---
 
 ## 🛠 Getting Started
 

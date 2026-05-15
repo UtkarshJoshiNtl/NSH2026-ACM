@@ -138,24 +138,29 @@ static void run_aos(double* s, int n, double dt, int steps,
 // ─────────────────────────────────────────────────────────────────────────────
 // Returns time to completion in milliseconds.
 static void run_soa(double* s, int n, double dt, int steps, double mjd0){
-    size_t bytes = (size_t)n * sizeof(double);
-    double *dX, *dY, *dZ, *dVX, *dVY, *dVZ;
-    CUDA_CHECK(cudaMalloc(&dX, bytes)); CUDA_CHECK(cudaMalloc(&dY, bytes)); CUDA_CHECK(cudaMalloc(&dZ, bytes));
-    CUDA_CHECK(cudaMalloc(&dVX, bytes)); CUDA_CHECK(cudaMalloc(&dVY, bytes)); CUDA_CHECK(cudaMalloc(&dVZ, bytes));
+    size_t bytes_per_comp = (size_t)n * sizeof(double);
+    size_t total_gpu_bytes = bytes_per_comp * 6;
+    double *d_all;
+    CUDA_CHECK(cudaMalloc(&d_all, total_gpu_bytes));
+    
+    double *dX = d_all, *dY = d_all + n, *dZ = d_all + 2*n;
+    double *dVX = d_all + 3*n, *dVY = d_all + 4*n, *dVZ = d_all + 5*n;
 
-    // Scatter
-    double *hx=new double[n], *hy=new double[n], *hz=new double[n];
-    double *hvx=new double[n], *hvy=new double[n], *hvz=new double[n];
+    // Use pinned memory for faster scatter/gather transfers
+    double *h_pinned;
+    CUDA_CHECK(cudaHostAlloc(&h_pinned, total_gpu_bytes, cudaHostAllocDefault));
+    
+    double *hx = h_pinned, *hy = h_pinned + n, *hz = h_pinned + 2*n;
+    double *hvx = h_pinned + 3*n, *hvy = h_pinned + 4*n, *hvz = h_pinned + 5*n;
+
+    // Scatter AoS -> SoA
+    #pragma omp parallel for
     for(int i=0; i<n; i++){
         hx[i]=s[i*6]; hy[i]=s[i*6+1]; hz[i]=s[i*6+2];
         hvx[i]=s[i*6+3]; hvy[i]=s[i*6+4]; hvz[i]=s[i*6+5];
     }
-    CUDA_CHECK(cudaMemcpy(dX, hx, bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(dY, hy, bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(dZ, hz, bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(dVX, hvx, bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(dVY, hvy, bytes, cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(dVZ, hvz, bytes, cudaMemcpyHostToDevice));
+
+    CUDA_CHECK(cudaMemcpy(dX, hx, total_gpu_bytes, cudaMemcpyHostToDevice));
 
     int blk = 256, grd = (n+blk-1)/blk;
     k_prop_soa<<<grd, blk>>>(dX, dY, dZ, dVX, dVY, dVZ, n, dt, steps, mjd0);
@@ -163,23 +168,17 @@ static void run_soa(double* s, int n, double dt, int steps, double mjd0){
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    // Gather
-    CUDA_CHECK(cudaMemcpy(hx, dX, bytes, cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(hy, dY, bytes, cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(hz, dZ, bytes, cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(hvx, dVX, bytes, cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(hvy, dVY, bytes, cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(hvz, dVZ, bytes, cudaMemcpyDeviceToHost));
+    // Gather SoA -> AoS
+    CUDA_CHECK(cudaMemcpy(h_pinned, d_all, total_gpu_bytes, cudaMemcpyDeviceToHost));
 
+    #pragma omp parallel for
     for(int i=0; i<n; i++){
         s[i*6]=hx[i]; s[i*6+1]=hy[i]; s[i*6+2]=hz[i];
         s[i*6+3]=hvx[i]; s[i*6+4]=hvy[i]; s[i*6+5]=hvz[i];
     }
 
-    delete[] hx; delete[] hy; delete[] hz;
-    delete[] hvx; delete[] hvy; delete[] hvz;
-    cudaFree(dX); cudaFree(dY); cudaFree(dZ);
-    cudaFree(dVX); cudaFree(dVY); cudaFree(dVZ);
+    cudaFreeHost(h_pinned);
+    cudaFree(d_all);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

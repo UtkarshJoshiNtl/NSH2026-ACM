@@ -33,9 +33,10 @@ def _calculate_gravity_acceleration(x, y, z, r_mag, r2, r3, r5, r7):
     # J3
     zr = z / r_mag
     j3f = 2.5 * J3 * MU * RE**3 / r7
-    ax += j3f * x * (7.0 * z2_r2 * zr - 3.0 * zr)
-    ay += j3f * y * (7.0 * z2_r2 * zr - 3.0 * zr)
-    az += j3f * (7.0 * z2_r2 * zr * z - 6.0 * z2_r2 + (3.0 / 5.0))
+    # Correct formula: a_x = j3f * x * (7*z^3/r^2 - 3*z)
+    ax += j3f * x * (7.0 * z2_r2 * z - 3.0 * z)
+    ay += j3f * y * (7.0 * z2_r2 * z - 3.0 * z)
+    az += j3f * (7.0 * z2_r2 * z * z - 6.0 * z * z + 0.6 * r2)
 
     # J4
     z4_r4 = z2_r2 * z2_r2
@@ -79,7 +80,7 @@ def get_atmospheric_density(altitude_km):
             h0, H, rho0 = _ATMO_TABLE[i]
             if h0 <= altitude_km < _ATMO_TABLE[i+1][0]:
                 return rho0 * math.exp(-(altitude_km - h0) / H)
-        return _ATMO_TABLE[0][2] * math.exp(-altitude_km / _ATMO_TABLE[0][1])
+        return 0.0 # Above 1000km
 
     # Vectorized path
     alt = np.atleast_1d(altitude_km)
@@ -277,9 +278,9 @@ def _accel_batch(R: np.ndarray, V: np.ndarray,
 
     ZR = Z / R_mag
     J3F = 2.5 * J3 * MU * RE**3 / R7
-    ax += J3F * X * (7.0 * Z2_R2 * ZR - 3.0 * ZR)
-    ay += J3F * Y * (7.0 * Z2_R2 * ZR - 3.0 * ZR)
-    az += J3F * (7.0 * Z2_R2 * ZR * Z - 6.0 * Z2_R2 + 0.6)
+    ax += J3F * X * (7.0 * Z2_R2 * Z - 3.0 * Z)
+    ay += J3F * Y * (7.0 * Z2_R2 * Z - 3.0 * Z)
+    az += J3F * (7.0 * Z2_R2 * Z * Z - 6.0 * Z * Z + 0.6 * R2)
 
     Z4_R4 = Z2_R2**2
     J4F = 0.625 * J4 * MU * RE**4 / R7
