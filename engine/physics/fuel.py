@@ -11,6 +11,7 @@ from ..constants import ISP, G0, G0_KM, DRY_MASS, INITIAL_FUEL
 class FuelTracker:
     def __init__(self, initial_fuel: float = INITIAL_FUEL, dry_mass: float = DRY_MASS):
         self.fuel_kg = initial_fuel
+        self.initial_fuel_kg = initial_fuel
         self.dry_mass = dry_mass
 
     def current_mass(self) -> float:
@@ -19,7 +20,7 @@ class FuelTracker:
 
     def fuel_percentage(self) -> float:
         """Returns percentage of fuel remaining."""
-        return (self.fuel_kg / INITIAL_FUEL) * 100.0 if INITIAL_FUEL > 0 else 0.0
+        return (self.fuel_kg / self.initial_fuel_kg) * 100.0 if self.initial_fuel_kg > 0 else 0.0
 
     def is_critical(self) -> bool:
         """True if fuel is below 10%."""

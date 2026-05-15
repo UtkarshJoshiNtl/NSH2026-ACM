@@ -58,11 +58,13 @@ def main():
         logger.info(f"Loaded {len(satellites)} satellites.")
         
         # We need SGP4 initialization & ECI propagation logic to be connected.
-        logger.warning("SGP4 initialization & ECI propagation logic to be connected.")
+        logger.info("Starting integration...")
         
         for step in range(args.steps):
             ctx.advance_time(args.dt)
-            
+            if step % max(1, args.steps // 10) == 0:
+                logger.info(f"Step {step}/{args.steps} (t={ctx.simulation_time:.1f}s)")
+                
         logger.info("Simulation completed.")
         
     elif args.command == "passes":

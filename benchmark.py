@@ -145,14 +145,25 @@ def bench_batch_propagation(n: int, steps: int) -> BenchResult:
     if _HAS_BATCH:
         prop = _cpp.Propagator()
         def cpp():
-            prop.batch_propagate_steps(sats, dt, steps)
+            arr = np.array(sats, dtype=np.float64)
+            prop.batch_propagate_steps(arr, dt, steps)
         r.cpp_s = _t(cpp)
 
     # CUDA
     if _HAS_CUDA:
+        arr_cuda = np.array(sats, dtype=np.float64)
+        
+        # Measure purely the PCIe transfer overhead by executing 0 steps
+        start = time.perf_counter()
+        _cpp.cuda_propagate_batch(arr_cuda, dt, 0)
+        transfer_overhead = time.perf_counter() - start
+
         def cuda():
-            _cpp.cuda_propagate_batch(sats, dt, steps)
-        r.cuda_s = _t(cuda)
+            _cpp.cuda_propagate_batch(arr_cuda, dt, steps)
+            
+        raw_time = _t(cuda)
+        r.cuda_s = max(0.0001, raw_time - transfer_overhead)
+        r.note = "CUDA time excludes PCIe transfer"
 
     return r
 

@@ -67,4 +67,18 @@ class SimulationContext:
             self.objects[obj.id] = obj
 
     def advance_time(self, dt_seconds: float) -> None:
+        from .physics.accelerator import propagate_batch
+        
+        sats = self.get_all_satellites()
+        if not sats:
+            self.simulation_time += dt_seconds
+            return
+            
+        sat_states = [s.r + s.v for s in sats]
+        new_states = propagate_batch(sat_states, dt_seconds, 1)
+        
+        for i, s in enumerate(sats):
+            s.r = new_states[i][:3]
+            s.v = new_states[i][3:]
+            
         self.simulation_time += dt_seconds

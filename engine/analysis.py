@@ -17,30 +17,10 @@ from sgp4.api import Satrec, jday
 
 def _teme_to_eci(r_teme: np.ndarray, v_teme: np.ndarray, dt: datetime):
     """
-    Rotate TEME (True Equator Mean Equinox) vectors into ECI (pseudo-GCRF / J2000).
-    The correction is the Greenwich Apparent Sidereal Time (GAST) precession offset
-    between the TEME and GCRF x-axes — approximately the equation of equinoxes (< 1").
-    For engineering-grade analysis this simplification (GMST instead of GAST) is
-    acceptable; sub-arcsecond accuracy requires nutation corrections via Skyfield/Astropy.
-
-    Returns: r_eci, v_eci  (km, km/s)
+    TEME is already an inertial frame, differing from ECI/GCRF only by the
+    equation of the equinoxes (< 1"). We approximate them as perfectly aligned.
     """
-    theta = gmst_from_datetime(dt)
-
-    # TEME x-axis is aligned with GMST — rotate by -theta to get pseudo-ECI (J2000 approx)
-    cos_t = np.cos(-theta)
-    sin_t = np.sin(-theta)
-    R = np.array([
-        [cos_t, -sin_t, 0],
-        [sin_t,  cos_t, 0],
-        [0,      0,     1],
-    ])
-    # For velocity: Omega_earth cross r must be removed to go TEME → ECI
-    from .constants import OMEGA_EARTH
-    omega_vec = np.array([0.0, 0.0, OMEGA_EARTH])
-    v_eci = R @ v_teme + np.cross(omega_vec, R @ r_teme)
-    r_eci = R @ r_teme
-    return r_eci, v_eci
+    return r_teme, v_teme
 
 
 def report_passes(

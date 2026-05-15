@@ -18,7 +18,6 @@ from ..constants import DRY_MASS, INITIAL_FUEL
 # Python fallbacks
 from .propagator import rk4_step, propagate_batch_numpy
 from .fuel import FuelTracker as PyFuelTracker
-from .conjunction import ConjunctionDetector as PyConjunctionDetector
 from .maneuver import ManeuverCalculator as PyManeuverCalculator
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,10 @@ def backend_info() -> dict:
 def propagate(state: list, dt_seconds: float) -> list:
     """Propagate a single satellite one RK4 step."""
     if _HAS_CPP:
-        return list(_physics.Propagator().propagate(state, dt_seconds))
+        try:
+            return list(_physics.Propagator().propagate(state, dt_seconds))
+        except Exception as e:
+            logger.warning(f"C++ propagate failed: {e}. Falling back to Python.")
     return list(rk4_step(tuple(state), dt_seconds))
 
 
@@ -80,8 +82,11 @@ def propagate_with_drag(state: list, dt_seconds: float,
                          cd: float = 2.2) -> list:
     """Propagate a single satellite one RK4 step with drag."""
     if _HAS_CPP:
-        return list(_physics.Propagator().propagate_with_drag(
-            state, dt_seconds, area, mass, cd))
+        try:
+            return list(_physics.Propagator().propagate_with_drag(
+                state, dt_seconds, area, mass, cd))
+        except Exception as e:
+            logger.warning(f"C++ propagate_with_drag failed: {e}. Falling back to Python.")
     return list(rk4_step(tuple(state), dt_seconds, area, mass, cd))
 
 
@@ -89,8 +94,11 @@ def propagate_steps(state: list, total_seconds: float,
                      step_size: float = 10.0) -> list:
     """Propagate a single satellite for a total time window, returning final state."""
     if _HAS_CPP:
-        return list(_physics.Propagator().propagate_steps(
-            state, total_seconds, step_size))
+        try:
+            return list(_physics.Propagator().propagate_steps(
+                state, total_seconds, step_size))
+        except Exception as e:
+            logger.warning(f"C++ propagate_steps failed: {e}. Falling back to Python.")
     states = [list(state)]
     curr = tuple(state)
     rem = total_seconds
@@ -114,20 +122,26 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
 
     # ── CUDA GPU ──────────────────────────────────────────────────────────────
     if _HAS_CUDA:
-        if with_drag:
-            res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd)
-        else:
-            res = _physics.cuda_propagate_batch(arr, dt_seconds, steps)
-        return res.tolist()
+        try:
+            if with_drag:
+                res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd)
+            else:
+                res = _physics.cuda_propagate_batch(arr, dt_seconds, steps)
+            return res.tolist()
+        except Exception as e:
+            logger.warning(f"CUDA propagate_batch failed: {e}. Falling back to C++.")
 
     # ── C++ batch (GIL-released, optionally OpenMP) ───────────────────────────
     if _HAS_BATCH_CPP:
-        prop = _physics.Propagator()
-        if with_drag:
-            res = prop.batch_propagate_steps_drag(arr, dt_seconds, steps, area, mass, cd)
-        else:
-            res = prop.batch_propagate_steps(arr, dt_seconds, steps)
-        return res.tolist()
+        try:
+            prop = _physics.Propagator()
+            if with_drag:
+                res = prop.batch_propagate_steps_drag(arr, dt_seconds, steps, area, mass, cd)
+            else:
+                res = prop.batch_propagate_steps(arr, dt_seconds, steps)
+            return res.tolist()
+        except Exception as e:
+            logger.warning(f"C++ batch_propagate_steps failed: {e}. Falling back to NumPy.")
 
     # ── NumPy vectorized fallback ─────────────────────────────────────────────
     return propagate_batch_numpy(states, dt_seconds, steps,
@@ -142,10 +156,16 @@ def propagate_batch_full_history(states: list, dt_seconds: float, steps: int) ->
     arr = np.array(states, dtype=np.float64)
     
     if _HAS_CUDA:
-        return _physics.cuda_propagate_full_history(arr, dt_seconds, steps)
+        try:
+            return _physics.cuda_propagate_full_history(arr, dt_seconds, steps)
+        except Exception as e:
+            logger.warning(f"CUDA propagate_full_history failed: {e}. Falling back to C++.")
     
     if _HAS_BATCH_CPP:
-        return _physics.Propagator().batch_propagate_full_history(arr, dt_seconds, steps)
+        try:
+            return _physics.Propagator().batch_propagate_full_history(arr, dt_seconds, steps)
+        except Exception as e:
+            logger.warning(f"C++ batch_propagate_full_history failed: {e}. Falling back to NumPy.")
         
     # Fallback (slow)
     n = len(states)
@@ -167,15 +187,22 @@ def detect_conjunctions(sat_states: list, debris_states: list,
     All-pairs conjunction screening.
     """
     if _HAS_CUDA and hasattr(_physics, "cuda_detect_conjunctions"):
-        s_arr = np.array(sat_states, dtype=np.float64)
-        d_arr = np.array(debris_states, dtype=np.float64)
-        return _physics.cuda_detect_conjunctions(s_arr, d_arr, lookahead, step_s)
+        try:
+            s_arr = np.array(sat_states, dtype=np.float64)
+            d_arr = np.array(debris_states, dtype=np.float64)
+            return _physics.cuda_detect_conjunctions(s_arr, d_arr, lookahead, step_s)
+        except Exception as e:
+            logger.warning(f"CUDA detect_conjunctions failed: {e}. Falling back to C++.")
 
     if _HAS_CPP:
-        s_arr = np.array(sat_states, dtype=np.float64)
-        d_arr = np.array(debris_states, dtype=np.float64)
-        return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s)
+        try:
+            s_arr = np.array(sat_states, dtype=np.float64)
+            d_arr = np.array(debris_states, dtype=np.float64)
+            return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s)
+        except Exception as e:
+            logger.warning(f"C++ detect_conjunctions failed: {e}. Falling back to Python.")
 
+    from .conjunction import ConjunctionDetector as PyConjunctionDetector
     detector = PyConjunctionDetector()
     return detector.detect(sat_states, debris_states,
                             lookahead_s=lookahead, step_s=step_s)
@@ -185,19 +212,25 @@ def detect_conjunctions(sat_states: list, debris_states: list,
 
 def compute_fuel_used(delta_v: list, fuel_kg: float = INITIAL_FUEL) -> float:
     if _HAS_CPP:
-        return _physics.FuelTracker(fuel_kg, DRY_MASS).calculate_fuel_cost(delta_v)
+        try:
+            return _physics.FuelTracker(fuel_kg, DRY_MASS).calculate_fuel_cost(delta_v)
+        except Exception as e:
+            logger.warning(f"C++ compute_fuel_used failed: {e}. Falling back to Python.")
     return PyFuelTracker(fuel_kg).calculate_fuel_cost(delta_v)
 
 
 def calculate_maneuver(sat_state: list, warning) -> dict:
     if _HAS_CPP:
-        p = _physics.ManeuverCalculator().calculate(sat_state, warning)
-        return {
-            "evasion_dv":   list(p.evasion_dv_eci),
-            "recovery_dv":  list(p.recovery_dv_eci),
-            "fuel_cost_kg": p.fuel_cost_kg,
-            "burn_timing_offset_s": p.burn_timing_offset_s,
-        }
+        try:
+            p = _physics.ManeuverCalculator().calculate(sat_state, warning)
+            return {
+                "evasion_dv":   list(p.evasion_dv_eci),
+                "recovery_dv":  list(p.recovery_dv_eci),
+                "fuel_cost_kg": p.fuel_cost_kg,
+                "burn_timing_offset_s": p.burn_timing_offset_s,
+            }
+        except Exception as e:
+            logger.warning(f"C++ calculate_maneuver failed: {e}. Falling back to Python.")
     p = PyManeuverCalculator().calculate(sat_state, warning)
     return {
         "evasion_dv":   p.evasion_dv_eci,

@@ -16,4 +16,5 @@ public:
     
     double fuel_kg;
     double dry_mass;
+    double initial_fuel_kg;
 };

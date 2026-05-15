@@ -2,14 +2,14 @@
 #include <cmath>
 
 FuelTracker::FuelTracker(double initial_fuel, double dry_mass)
-    : fuel_kg(initial_fuel), dry_mass(dry_mass) {}
+    : fuel_kg(initial_fuel), dry_mass(dry_mass), initial_fuel_kg(initial_fuel) {}
 
 double FuelTracker::current_mass() const {
     return dry_mass + fuel_kg;
 }
 
 double FuelTracker::fuel_percentage() const {
-    return (fuel_kg / INITIAL_FUEL) * 100.0;
+    return initial_fuel_kg > 0 ? (fuel_kg / initial_fuel_kg) * 100.0 : 0.0;
 }
 
 bool FuelTracker::is_critical() const {

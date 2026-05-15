@@ -48,23 +48,13 @@ __global__ void k_prop_drag(double* __restrict__ S, int n, double dt, int steps,
     S[i*6+3] = vx; S[i*6+4] = vy; S[i*6+5] = vz;
 }
 
-// ── Simple Device Memory Cache ───────────────────────────────────────────────
-static double* g_cache_ptr = nullptr;
-static size_t  g_cache_size = 0;
-
-static double* get_device_mem(size_t bytes) {
-    if (bytes > g_cache_size) {
-        if (g_cache_ptr) cudaFree(g_cache_ptr);
-        CUDA_CHECK(cudaMalloc(&g_cache_ptr, bytes));
-        g_cache_size = bytes;
-    }
-    return g_cache_ptr;
-}
+// ── Direct Allocation ───────────────────────────────────────────────
 
 static void run(double* s, int n, double dt, int steps,
                 bool drag, double A, double m, double cd){
     size_t bytes = (size_t)n * 6 * sizeof(double);
-    double* ds = get_device_mem(bytes);
+    double* ds;
+    CUDA_CHECK(cudaMalloc(&ds, bytes));
     CUDA_CHECK(cudaMemcpy(ds, s, bytes, cudaMemcpyHostToDevice));
     
     int blk = 256;
@@ -76,6 +66,7 @@ static void run(double* s, int n, double dt, int steps,
     CUDA_CHECK(cudaGetLastError()); 
     CUDA_CHECK(cudaDeviceSynchronize());
     CUDA_CHECK(cudaMemcpy(s, ds, bytes, cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaFree(ds));
 }
 
 // ── Full History Kernel ──────────────────────────────────────────────────────

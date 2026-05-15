@@ -31,25 +31,9 @@ struct GpuWarning {
     int severity; // 0=none, 1=advisory, 2=warning, 3=critical
 };
 
-// ── Broad-phase: flag pairs within 50km coarse radius at t=0 ──────────────────
-__global__ void k_broad(const double* __restrict__ sats, int ns,
-                         const double* __restrict__ debs, int nd,
-                         int* __restrict__ flags) {
-    int si = blockIdx.x * blockDim.x + threadIdx.x;
-    int di = blockIdx.y * blockDim.y + threadIdx.y;
-    if (si >= ns || di >= nd) return;
-
-    double dx = sats[si*6]   - debs[di*6];
-    double dy = sats[si*6+1] - debs[di*6+1];
-    double dz = sats[si*6+2] - debs[di*6+2];
-    double dist = sqrt(dx*dx + dy*dy + dz*dz);
-    flags[si * nd + di] = (dist < 50.0) ? 1 : 0;
-}
-
-// ── Narrow-phase: temporal sweep for flagged pairs ────────────────────────────
+// ── Temporal sweep for all pairs ────────────────────────────
 __global__ void k_narrow(const double* __restrict__ sats, int ns,
                           const double* __restrict__ debs, int nd,
-                          const int* __restrict__ flags,
                           GpuWarning* __restrict__ out,
                           int* __restrict__ out_count,
                           int max_out,
@@ -57,7 +41,6 @@ __global__ void k_narrow(const double* __restrict__ sats, int ns,
     int si = blockIdx.x * blockDim.x + threadIdx.x;
     int di = blockIdx.y * blockDim.y + threadIdx.y;
     if (si >= ns || di >= nd) return;
-    if (!flags[si * nd + di]) return;
 
     // Load initial states into registers
     double sx = sats[si*6], sy = sats[si*6+1], sz = sats[si*6+2];
@@ -102,13 +85,12 @@ std::vector<ConjunctionWarning> cuda_detect_conjunctions(
 
     if (ns == 0 || nd == 0) return {};
 
-    double *ds, *dd; int *flags, *cnt;
+    double *ds, *dd; int *cnt;
     int max_out = std::max(ns * nd / 10, 1024);
     GpuWarning* gout;
 
     CUDA_CHECK(cudaMalloc(&ds,    ns*6*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&dd,    nd*6*sizeof(double)));
-    CUDA_CHECK(cudaMalloc(&flags, ns*nd*sizeof(int)));
     CUDA_CHECK(cudaMalloc(&cnt,   sizeof(int)));
     CUDA_CHECK(cudaMalloc(&gout,  max_out*sizeof(GpuWarning)));
     
@@ -116,13 +98,10 @@ std::vector<ConjunctionWarning> cuda_detect_conjunctions(
     CUDA_CHECK(cudaMemcpy(dd, debris_states, nd*6*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemset(cnt, 0, sizeof(int)));
 
-    // Broad phase
     dim3 blk(16, 16), grd((ns+15)/16, (nd+15)/16);
-    k_broad<<<grd, blk>>>(ds, ns, dd, nd, flags);
-    CUDA_CHECK(cudaGetLastError());
 
-    // Narrow phase
-    k_narrow<<<grd, blk>>>(ds, ns, dd, nd, flags, gout, cnt, max_out, lookahead_s, step_s);
+    // Narrow phase for all pairs
+    k_narrow<<<grd, blk>>>(ds, ns, dd, nd, gout, cnt, max_out, lookahead_s, step_s);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -134,7 +113,7 @@ std::vector<ConjunctionWarning> cuda_detect_conjunctions(
     if (h_cnt > 0)
         CUDA_CHECK(cudaMemcpy(hw.data(), gout, h_cnt*sizeof(GpuWarning), cudaMemcpyDeviceToHost));
 
-    cudaFree(ds); cudaFree(dd); cudaFree(flags); cudaFree(cnt); cudaFree(gout);
+    cudaFree(ds); cudaFree(dd); cudaFree(cnt); cudaFree(gout);
 
     static const char* SEV[] = {"NONE", "ADVISORY", "WARNING", "CRITICAL"};
     std::vector<ConjunctionWarning> result;

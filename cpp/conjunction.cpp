@@ -21,12 +21,13 @@ std::vector<ConjunctionWarning> ConjunctionDetector::detect(
             
             double min_distance = 1e9;
             double tca = 0.0;
+            auto sat = sat_state;
+            auto deb = deb_state;
+            std::array<double, 6> sat_tca = sat_state;
+            std::array<double, 6> deb_tca = deb_state;
             
             // Propagate forward to find closest approach
             for (double t = 0.0; t <= lookahead_s; t += step_s) {
-                auto sat = prop.propagate(sat_state, t);
-                auto deb = prop.propagate(deb_state, t);
-                
                 double dx = sat[0] - deb[0];
                 double dy = sat[1] - deb[1];
                 double dz = sat[2] - deb[2];
@@ -35,7 +36,12 @@ std::vector<ConjunctionWarning> ConjunctionDetector::detect(
                 if (dist < min_distance) {
                     min_distance = dist;
                     tca = t;
+                    sat_tca = sat;
+                    deb_tca = deb;
                 }
+                
+                sat = prop.propagate(sat, step_s);
+                deb = prop.propagate(deb, step_s);
             }
             
             // Classify severity
@@ -48,12 +54,10 @@ std::vector<ConjunctionWarning> ConjunctionDetector::detect(
                 w.severity = "CRITICAL";
                 
                 // Calculate relative velocity
-                auto sat = prop.propagate(sat_state, tca);
-                auto deb = prop.propagate(deb_state, tca);
                 w.relative_velocity = {
-                    sat[3] - deb[3],
-                    sat[4] - deb[4],
-                    sat[5] - deb[5]
+                    sat_tca[3] - deb_tca[3],
+                    sat_tca[4] - deb_tca[4],
+                    sat_tca[5] - deb_tca[5]
                 };
                 
                 warnings.push_back(w);
@@ -65,12 +69,10 @@ std::vector<ConjunctionWarning> ConjunctionDetector::detect(
                 w.time_to_closest_approach = tca;
                 w.severity = "WARNING";
                 
-                auto sat = prop.propagate(sat_state, tca);
-                auto deb = prop.propagate(deb_state, tca);
                 w.relative_velocity = {
-                    sat[3] - deb[3],
-                    sat[4] - deb[4],
-                    sat[5] - deb[5]
+                    sat_tca[3] - deb_tca[3],
+                    sat_tca[4] - deb_tca[4],
+                    sat_tca[5] - deb_tca[5]
                 };
                 
                 warnings.push_back(w);
