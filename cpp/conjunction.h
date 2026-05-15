@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <array>
-
+#include "propagator.h"
 #include "physics_constants.h"
 
 // Probability of Collision result via Chan's method
@@ -33,8 +33,8 @@ public:
     ConjunctionDetector();
 
     std::vector<ConjunctionWarning> detect(
-        const std::vector<std::array<double, 6>>& sat_states,
-        const std::vector<std::array<double, 6>>& debris_states,
+        const std::vector<StateVector>& sat_states,
+        const std::vector<StateVector>& debris_states,
         double lookahead_s = 86400.0,
         double step_s = 60.0,
         double tle_age_days = 1.0  // used for covariance estimation

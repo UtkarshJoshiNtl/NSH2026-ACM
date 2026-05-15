@@ -31,25 +31,20 @@ class Propagator {
 public:
     // ── Single-step propagation ──────────────────────────────────────────────
     StateVector propagate(const StateVector& state,
-                          double dt_seconds) const;
+                          double dt_seconds, double mjd0 = 0.0) const;
 
     StateVector propagate_with_drag(const StateVector& state,
                                     double dt_seconds,
                                     double area,
                                     double mass,
-                                    double cd) const;
+                                    double cd, double cr = 1.5, double mjd0 = 0.0) const;
 
     // ── Multi-step propagation (CPU serial) ──────────────────────────────────
     StateVector propagate_steps(const StateVector& state,
                                 double total_seconds,
-                                double step_size = 10.0) const;
-
-    StateVector propagate_steps_drag(const StateVector& state,
-                                     double total_seconds,
-                                     double step_size,
-                                     double area,
-                                     double mass,
-                                     double cd) const;
+                                double step_size = 10.0,
+                                double area = 0.0, double mass = 1.0, double cd = 2.2, double cr = 1.5,
+                                bool with_drag = false, double mjd0 = 0.0) const;
 
     // ── Batch propagation (N satellites × steps, CPU parallel loops) ─────────
     // states_inout: flat array of N*6 doubles (stride-6), modified in place.
@@ -58,7 +53,7 @@ public:
     void propagate_batch(double* states_inout,
                          int n,
                          double dt_seconds,
-                         int steps) const;
+                         int steps, double mjd0) const;
 
     void propagate_batch_drag(double* states_inout,
                               int n,
@@ -66,13 +61,13 @@ public:
                               int steps,
                               double area,
                               double mass,
-                              double cd) const;
+                              double cd, double cr, double mjd0) const;
 
     // Python-friendly batch wrappers (accept list-of-lists, return same)
     std::vector<StateVector> batch_propagate_steps(
         const std::vector<StateVector>& states,
         double dt_seconds,
-        int steps) const;
+        int steps, double mjd0 = 0.0) const;
 
     std::vector<StateVector> batch_propagate_steps_drag(
         const std::vector<StateVector>& states,
@@ -80,30 +75,30 @@ public:
         int steps,
         double area,
         double mass,
-        double cd) const;
+        double cd, double cr = 1.5, double mjd0 = 0.0) const;
 
     // Returns full history: (steps+1) frames × n satellites × 6 doubles
     void batch_propagate_full_history(
         const double* initial_states,
         int n,
         double dt_seconds,
-        int steps,
+        int steps, double mjd0,
         double* output_history) const;
 
 private:
-    std::array<double, 3> acceleration(const std::array<double, 3>& r) const;
+    std::array<double, 3> acceleration(const std::array<double, 3>& r, double mjd) const;
 
     std::array<double, 3> acceleration_with_drag(const std::array<double, 3>& r,
                                                   const std::array<double, 3>& v,
                                                   double area,
                                                   double mass,
-                                                  double cd) const;
+                                                  double cd, double cr, double mjd) const;
 
-    StateVector derivatives(const StateVector& state) const;
+    StateVector derivatives(const StateVector& state, double mjd) const;
     StateVector derivatives_drag(const StateVector& state,
-                                 double area, double mass, double cd) const;
+                                 double area, double mass, double cd, double cr, double mjd) const;
 
-    StateVector rk4_step(const StateVector& state, double dt) const;
+    StateVector rk4_step(const StateVector& state, double dt, double mjd0 = 0.0, int current_step = 0) const;
     StateVector rk4_step_drag(const StateVector& state, double dt,
-                               double area, double mass, double cd) const;
+                               double area, double mass, double cd, double cr = 1.5, double mjd0 = 0.0, int current_step = 0) const;
 };

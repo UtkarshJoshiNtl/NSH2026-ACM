@@ -91,8 +91,8 @@ static PcResult chan_pc(double miss_dist_km, double sigma_r_km,
 }
 
 std::vector<ConjunctionWarning> ConjunctionDetector::detect(
-    const std::vector<std::array<double, 6>>& sat_states,
-    const std::vector<std::array<double, 6>>& debris_states,
+    const std::vector<StateVector>& sat_states,
+    const std::vector<StateVector>& debris_states,
     double lookahead_s,
     double step_s,
     double tle_age_days) const {
@@ -105,13 +105,13 @@ std::vector<ConjunctionWarning> ConjunctionDetector::detect(
 
     for (size_t i = 0; i < sat_states.size(); ++i) {
         for (size_t j = 0; j < debris_states.size(); ++j) {
-            auto sat = sat_states[i];
-            auto deb = debris_states[j];
-            std::array<double, 6> sat_tca = sat;
-            std::array<double, 6> deb_tca = deb;
+            StateVector sat = sat_states[i];
+            StateVector deb = debris_states[j];
 
-            double min_distance = 1e9;
-            double tca_coarse  = 0.0;
+            double min_distance = std::numeric_limits<double>::max();
+            double tca_coarse   = 0.0;
+            StateVector sat_tca = sat;
+            StateVector deb_tca = deb;
 
             // ── Coarse sweep (incremental propagation) ────────────────────────
             for (double t = 0.0; t <= lookahead_s; t += step_s) {
@@ -136,8 +136,8 @@ std::vector<ConjunctionWarning> ConjunctionDetector::detect(
 
             // ── Brent refinement in [tca_coarse - step_s, tca_coarse + step_s] ──
             // We propagate fresh from sat_states[i] for the Brent objective function.
-            const auto& s0 = sat_states[i];
-            const auto& d0 = debris_states[j];
+            StateVector s0 = sat_states[i];
+            StateVector d0 = debris_states[j];
 
             double t_lo = std::max(0.0, tca_coarse - step_s);
             double t_hi = std::min(lookahead_s, tca_coarse + step_s);

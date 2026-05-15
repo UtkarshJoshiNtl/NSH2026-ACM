@@ -82,45 +82,48 @@ def backend_info() -> dict:
 
 # ── Single-step propagation ───────────────────────────────────────────────────
 
-def propagate(state: list, dt_seconds: float) -> list:
+def propagate(state: list, dt_seconds: float, mjd0: float = 0.0) -> list:
     """Propagate a single satellite one RK4 step."""
     if _HAS_CPP:
         try:
-            return list(_physics.Propagator().propagate(state, dt_seconds))
+            return list(_physics.Propagator().propagate(state, dt_seconds, mjd0))
         except Exception as e:
             logger.warning(f"C++ propagate failed: {e}. Falling back to Python.")
-    return list(rk4_step(tuple(state), dt_seconds))
+    return list(rk4_step(tuple(state), dt_seconds, mjd0))
 
 
 def propagate_with_drag(state: list, dt_seconds: float,
                          area: float = 10.0, mass: float = 1000.0,
-                         cd: float = 2.2) -> list:
-    """Propagate a single satellite one RK4 step with drag."""
+                         cd: float = 2.2, cr: float = 1.5, mjd0: float = 0.0) -> list:
+    """Propagate a single satellite one RK4 step with drag/SRP."""
     if _HAS_CPP:
         try:
             return list(_physics.Propagator().propagate_with_drag(
-                state, dt_seconds, area, mass, cd))
+                state, dt_seconds, area, mass, cd, cr, mjd0))
         except Exception as e:
             logger.warning(f"C++ propagate_with_drag failed: {e}. Falling back to Python.")
-    return list(rk4_step(tuple(state), dt_seconds, area, mass, cd))
+    return list(rk4_step(tuple(state), dt_seconds, mjd0, 0, area, mass, cd, cr))
 
 
 def propagate_steps(state: list, total_seconds: float,
-                     step_size: float = 10.0) -> list:
+                     step_size: float = 10.0,
+                     area: float = 0.0, mass: float = 1.0, cd: float = 2.2, cr: float = 1.5,
+                     with_drag: bool = False, mjd0: float = 0.0) -> list:
     """Propagate a single satellite for a total time window, returning final state."""
     if _HAS_CPP:
         try:
             return list(_physics.Propagator().propagate_steps(
-                state, total_seconds, step_size))
+                state, total_seconds, step_size, area, mass, cd, cr, with_drag, mjd0))
         except Exception as e:
             logger.warning(f"C++ propagate_steps failed: {e}. Falling back to Python.")
-    states = [list(state)]
     curr = tuple(state)
     rem = total_seconds
+    steps_taken = 0
     while rem > 0:
         dt = min(step_size, rem)
-        curr = rk4_step(curr, dt)
+        curr = rk4_step(curr, dt, mjd0, steps_taken, area if with_drag else 0.0, mass, cd, cr)
         rem -= dt
+        steps_taken += 1
     return list(curr)
 
 
@@ -128,7 +131,8 @@ def propagate_steps(state: list, total_seconds: float,
 
 def propagate_batch(states: list, dt_seconds: float, steps: int,
                      area: float = 0.0, mass: float = 1.0,
-                     cd: float = 2.2, with_drag: bool = False) -> list:
+                     cd: float = 2.2, cr: float = 1.5, with_drag: bool = False,
+                     mjd0: float = 0.0) -> list:
     """
     Propagate N satellites for `steps` RK4 steps.
     """
@@ -160,10 +164,13 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
 
     # ── NumPy vectorized fallback ─────────────────────────────────────────────
     return propagate_batch_numpy(states, dt_seconds, steps,
-                                  area, mass, cd, with_drag)
+                                  area, mass, cd, cr, with_drag, mjd0)
 
 
-def propagate_batch_full_history(states: list, dt_seconds: float, steps: int) -> np.ndarray:
+def propagate_batch_full_history(states: list, dt_seconds: float, steps: int,
+                                 area: float = 0.0, mass: float = 1.0,
+                                 cd: float = 2.2, cr: float = 1.5, with_drag: bool = False,
+                                 mjd0: float = 0.0) -> np.ndarray:
     """
     Propagate N satellites for `steps` steps and return the ENTIRE history.
     Returns: NumPy array of shape (steps + 1, N, 6)
@@ -188,7 +195,8 @@ def propagate_batch_full_history(states: list, dt_seconds: float, steps: int) ->
     history[0] = arr
     curr = arr
     for s in range(1, steps + 1):
-        curr = np.array(propagate_batch_numpy(curr.tolist(), dt_seconds, 1))
+        step_mjd0 = mjd0 + ((s-1) * dt_seconds) / 86400.0 if mjd0 > 0 else 0.0
+        curr = np.array(propagate_batch_numpy(curr.tolist(), dt_seconds, 1, area, mass, cd, cr, with_drag, step_mjd0))
         history[s] = curr
     return history
 

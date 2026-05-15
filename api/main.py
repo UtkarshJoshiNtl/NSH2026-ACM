@@ -75,20 +75,25 @@ def propagate_single(req: PropagateRequest):
     """
     Propagate a single satellite state vector forward in time.
 
-    Uses RK4 with J2/J3/J4 gravity perturbations (+ optional drag).
+    Uses RK4 with J2/J3/J4 gravity perturbations (+ optional drag/SRP/third-body).
     The active backend is selected automatically at startup.
     """
     try:
-        state = req.state
-        for _ in range(req.steps):
-            if req.with_drag:
-                from engine.physics.accelerator import propagate_with_drag
-                state = propagate_with_drag(state, req.dt_seconds,
-                                            req.area_m2, req.mass_kg, req.cd)
-            else:
-                state = acc_propagate(state, req.dt_seconds)
+        total = req.steps * req.dt_seconds
+        from engine.physics.accelerator import propagate_steps
+        final_state = propagate_steps(
+            state=req.state,
+            total_seconds=total,
+            step_size=req.dt_seconds,
+            area=req.area_m2,
+            mass=req.mass_kg,
+            cd=req.cd,
+            cr=req.cr,
+            with_drag=req.with_drag,
+            mjd0=req.mjd0
+        )
         return PropagateResponse(
-            state=state,
+            state=final_state,
             backend=backend_info()["backend"],
             steps_taken=req.steps,
         )
@@ -115,8 +120,8 @@ def propagate_batch_endpoint(req: BatchPropagateRequest):
     try:
         result = propagate_batch(
             req.states, req.dt_seconds, req.steps,
-            area=req.area_m2, mass=req.mass_kg, cd=req.cd,
-            with_drag=req.with_drag,
+            area=req.area_m2, mass=req.mass_kg, cd=req.cd, cr=req.cr,
+            with_drag=req.with_drag, mjd0=req.mjd0
         )
         return BatchPropagateResponse(
             states=result,

@@ -22,6 +22,8 @@ class PropagateRequest(BaseModel):
     area_m2: float = Field(10.0, gt=0, description="Cross-section area [m²]")
     mass_kg: float = Field(1000.0, gt=0, description="Satellite mass [kg]")
     cd: float = Field(2.2, gt=0, description="Drag coefficient")
+    cr: float = Field(1.5, gt=0, description="Radiation pressure coefficient")
+    mjd0: float = Field(0.0, ge=0, description="Initial Modified Julian Date")
 
 
 class PropagateResponse(BaseModel):
@@ -38,6 +40,8 @@ class BatchPropagateRequest(BaseModel):
     area_m2: float = 10.0
     mass_kg: float = 1000.0
     cd: float = 2.2
+    cr: float = 1.5
+    mjd0: float = 0.0
 
 
 class BatchPropagateResponse(BaseModel):

@@ -47,8 +47,56 @@ static double atmospheric_density(double alt_km) {
     return ATMO_TABLE[0].rho_base * std::exp(-alt_km / ATMO_TABLE[0].scale_height_km);
 }
 
-// ── Gravity: J2 + J3 + J4 ────────────────────────────────────────────────────
-std::array<double,3> Propagator::acceleration(const std::array<double,3>& r) const {
+// ── Ephemeris ────────────────────────────────────────────────────────────────
+static constexpr double DEG2RAD = M_PI / 180.0;
+
+static std::array<double, 3> sun_position_eci(double mjd) {
+    double d = mjd - 51544.5;
+    double g_rad = (357.529 + 0.98560028 * d) * DEG2RAD;
+    double q = 280.459 + 0.98564736 * d;
+    double L_rad = (q + 1.915 * std::sin(g_rad) + 0.020 * std::sin(2 * g_rad)) * DEG2RAD;
+    double R_au = 1.00014 - 0.01671 * std::cos(g_rad) - 0.00014 * std::cos(2 * g_rad);
+    double R_km = R_au * AU_CONST; // Note: Need to make sure AU_CONST is defined
+    double e_rad = (23.439 - 0.00000036 * d) * DEG2RAD;
+    return {
+        R_km * std::cos(L_rad),
+        R_km * std::cos(e_rad) * std::sin(L_rad),
+        R_km * std::sin(e_rad) * std::sin(L_rad)
+    };
+}
+
+static std::array<double, 3> moon_position_eci(double mjd) {
+    double d = mjd - 51544.5;
+    double L_rad = (218.316 + 13.176396 * d) * DEG2RAD;
+    double M_rad = (134.963 + 13.064993 * d) * DEG2RAD;
+    double F_rad = (93.272 + 13.229350 * d) * DEG2RAD;
+    double l_ecl = L_rad + (6.289 * std::sin(M_rad)) * DEG2RAD;
+    double b_ecl = (5.128 * std::sin(F_rad)) * DEG2RAD;
+    double dist = 385001.0 - 20905.0 * std::cos(M_rad);
+    double e_rad = (23.439 - 0.00000036 * d) * DEG2RAD;
+    
+    double x_ecl = dist * std::cos(b_ecl) * std::cos(l_ecl);
+    double y_ecl = dist * std::cos(b_ecl) * std::sin(l_ecl);
+    double z_ecl = dist * std::sin(b_ecl);
+    
+    return {
+        x_ecl,
+        y_ecl * std::cos(e_rad) - z_ecl * std::sin(e_rad),
+        y_ecl * std::sin(e_rad) + z_ecl * std::cos(e_rad)
+    };
+}
+
+static void add_third_body(double& ax, double& ay, double& az, const std::array<double,3>& r, const std::array<double,3>& rb, double mu_body) {
+    double dx = rb[0] - r[0], dy = rb[1] - r[1], dz = rb[2] - r[2];
+    double d3 = std::pow(dx*dx + dy*dy + dz*dz, 1.5);
+    double rb3 = std::pow(rb[0]*rb[0] + rb[1]*rb[1] + rb[2]*rb[2], 1.5);
+    ax += mu_body * (dx/d3 - rb[0]/rb3);
+    ay += mu_body * (dy/d3 - rb[1]/rb3);
+    az += mu_body * (dz/d3 - rb[2]/rb3);
+}
+
+// ── Gravity: J2 + J3 + J4 + Lunisolar ────────────────────────────────────────
+std::array<double,3> Propagator::acceleration(const std::array<double,3>& r, double mjd) const {
     double x = r[0], y = r[1], z = r[2];
     double r2  = x*x + y*y + z*z;
     double rm  = std::sqrt(r2);
@@ -81,15 +129,20 @@ std::array<double,3> Propagator::acceleration(const std::array<double,3>& r) con
     ay += j4f * y * (3.0 - 42.0 * z2_r2 + 63.0 * z4_r4);
     az += j4f * z * (15.0 - 70.0 * z2_r2 + 63.0 * z4_r4);
 
+    if (mjd > 0.0) {
+        add_third_body(ax, ay, az, r, sun_position_eci(mjd), MU_SUN);
+        add_third_body(ax, ay, az, r, moon_position_eci(mjd), MU_MOON);
+    }
+
     return {ax, ay, az};
 }
 
-// ── Gravity + Drag ────────────────────────────────────────────────────────────
+// ── Gravity + Drag + SRP ──────────────────────────────────────────────────────
 std::array<double,3> Propagator::acceleration_with_drag(
         const std::array<double,3>& r, const std::array<double,3>& v,
-        double area, double mass, double cd) const {
+        double area, double mass, double cd, double cr, double mjd) const {
 
-    auto a = acceleration(r);
+    auto a = acceleration(r, mjd);
     double x = r[0], y = r[1];
     double rm = std::sqrt(x*x + y*y + r[2]*r[2]);
     double alt = rm - RE;
@@ -109,148 +162,193 @@ std::array<double,3> Propagator::acceleration_with_drag(
             a[2] += df * vr_z;
         }
     }
+
+    if (mjd > 0.0 && area > 0.0 && mass > 0.0) {
+        auto r_sun = sun_position_eci(mjd);
+        double rs_mag = std::sqrt(r_sun[0]*r_sun[0] + r_sun[1]*r_sun[1] + r_sun[2]*r_sun[2]);
+        double dot_prod = r[0]*r_sun[0] + r[1]*r_sun[1] + r[2]*r_sun[2];
+        
+        double shadow = 1.0;
+        if (dot_prod < 0) {
+            double proj = dot_prod / rs_mag;
+            double r_mag = std::sqrt(r[0]*r[0] + r[1]*r[1] + r[2]*r[2]);
+            double d_perp2 = std::max(0.0, r_mag*r_mag - proj*proj);
+            if (std::sqrt(d_perp2) < RE) shadow = 0.0;
+        }
+
+        if (shadow > 0.0) {
+            double dx = r[0] - r_sun[0];
+            double dy = r[1] - r_sun[1];
+            double dz = r[2] - r_sun[2];
+            double d_mag = std::sqrt(dx*dx + dy*dy + dz*dz);
+            double au_scale = (AU_CONST / rs_mag);
+            au_scale *= au_scale;
+            double coeff = -P_SR * cr * (area / mass) * shadow * au_scale * 1e-3 / d_mag;
+            a[0] += coeff * dx;
+            a[1] += coeff * dy;
+            a[2] += coeff * dz;
+        }
+    }
+
     return a;
 }
 
 // ── Derivatives ───────────────────────────────────────────────────────────────
-StateVector Propagator::derivatives(const StateVector& s) const {
-    auto a = acceleration({s[0], s[1], s[2]});
-    return {s[3], s[4], s[5], a[0], a[1], a[2]};
+StateVector Propagator::derivatives(const StateVector& s, double mjd) const {
+    std::array<double, 3> r = {s[0], s[1], s[2]};
+    std::array<double, 3> a = acceleration(r, mjd);
+    StateVector ret;
+    ret[0] = s[3]; ret[1] = s[4]; ret[2] = s[5];
+    ret[3] = a[0]; ret[4] = a[1]; ret[5] = a[2];
+    return ret;
 }
 StateVector Propagator::derivatives_drag(const StateVector& s,
-                                          double area, double mass, double cd) const {
-    auto a = acceleration_with_drag({s[0],s[1],s[2]}, {s[3],s[4],s[5]}, area, mass, cd);
-    return {s[3], s[4], s[5], a[0], a[1], a[2]};
+                                         double area, double mass, double cd, double cr, double mjd) const {
+    std::array<double, 3> r = {s[0], s[1], s[2]};
+    std::array<double, 3> v = {s[3], s[4], s[5]};
+    std::array<double, 3> a = acceleration_with_drag(r, v, area, mass, cd, cr, mjd);
+    StateVector ret;
+    ret[0] = s[3]; ret[1] = s[4]; ret[2] = s[5];
+    ret[3] = a[0]; ret[4] = a[1]; ret[5] = a[2];
+    return ret;
 }
 
 // ── RK4 step ──────────────────────────────────────────────────────────────────
-StateVector Propagator::rk4_step(const StateVector& s, double dt) const {
-    auto k1 = derivatives(s);
+StateVector Propagator::rk4_step(const StateVector& s, double dt, double mjd0, int current_step) const {
+    double mjd_start = (mjd0 > 0.0) ? mjd0 + (current_step * dt) / 86400.0 : 0.0;
+    double mjd_mid   = (mjd0 > 0.0) ? mjd_start + (dt / 2.0) / 86400.0 : 0.0;
+    double mjd_end   = (mjd0 > 0.0) ? mjd_start + dt / 86400.0 : 0.0;
+
+    auto k1 = derivatives(s, mjd_start);
     StateVector s2; for (int i=0;i<6;i++) s2[i] = s[i] + 0.5*dt*k1[i];
-    auto k2 = derivatives(s2);
+    auto k2 = derivatives(s2, mjd_mid);
     StateVector s3; for (int i=0;i<6;i++) s3[i] = s[i] + 0.5*dt*k2[i];
-    auto k3 = derivatives(s3);
+    auto k3 = derivatives(s3, mjd_mid);
     StateVector s4; for (int i=0;i<6;i++) s4[i] = s[i] + dt*k3[i];
-    auto k4 = derivatives(s4);
+    auto k4 = derivatives(s4, mjd_end);
     StateVector res;
     for (int i=0;i<6;i++) res[i] = s[i] + (dt/6.0)*(k1[i]+2*k2[i]+2*k3[i]+k4[i]);
     return res;
 }
 StateVector Propagator::rk4_step_drag(const StateVector& s, double dt,
-                                       double area, double mass, double cd) const {
-    auto k1 = derivatives_drag(s, area, mass, cd);
+                                       double area, double mass, double cd, double cr, double mjd0, int current_step) const {
+    double mjd_start = (mjd0 > 0.0) ? mjd0 + (current_step * dt) / 86400.0 : 0.0;
+    double mjd_mid   = (mjd0 > 0.0) ? mjd_start + (dt / 2.0) / 86400.0 : 0.0;
+    double mjd_end   = (mjd0 > 0.0) ? mjd_start + dt / 86400.0 : 0.0;
+
+    auto k1 = derivatives_drag(s, area, mass, cd, cr, mjd_start);
     StateVector s2; for (int i=0;i<6;i++) s2[i] = s[i] + 0.5*dt*k1[i];
-    auto k2 = derivatives_drag(s2, area, mass, cd);
+    auto k2 = derivatives_drag(s2, area, mass, cd, cr, mjd_mid);
     StateVector s3; for (int i=0;i<6;i++) s3[i] = s[i] + 0.5*dt*k2[i];
-    auto k3 = derivatives_drag(s3, area, mass, cd);
+    auto k3 = derivatives_drag(s3, area, mass, cd, cr, mjd_mid);
     StateVector s4; for (int i=0;i<6;i++) s4[i] = s[i] + dt*k3[i];
-    auto k4 = derivatives_drag(s4, area, mass, cd);
+    auto k4 = derivatives_drag(s4, area, mass, cd, cr, mjd_end);
     StateVector res;
     for (int i=0;i<6;i++) res[i] = s[i] + (dt/6.0)*(k1[i]+2*k2[i]+2*k3[i]+k4[i]);
     return res;
 }
 
 // ── Single-step public API ────────────────────────────────────────────────────
-StateVector Propagator::propagate(const StateVector& s, double dt) const {
-    return rk4_step(s, dt);
+StateVector Propagator::propagate(const StateVector& s, double dt, double mjd0) const {
+    return rk4_step(s, dt, mjd0, 0);
 }
 StateVector Propagator::propagate_with_drag(const StateVector& s, double dt,
-                                             double area, double mass, double cd) const {
-    return rk4_step_drag(s, dt, area, mass, cd);
+                                             double area, double mass, double cd, double cr, double mjd0) const {
+    return rk4_step_drag(s, dt, area, mass, cd, cr, mjd0, 0);
 }
 
 // ── Multi-step public API ─────────────────────────────────────────────────────
 StateVector Propagator::propagate_steps(const StateVector& s,
-                                         double total, double step) const {
-    StateVector cur = s;
-    for (double rem = total; rem > 0.0; rem -= step)
-        cur = rk4_step(cur, std::min(step, rem));
-    return cur;
-}
-StateVector Propagator::propagate_steps_drag(const StateVector& s,
-                                              double total, double step,
-                                              double area, double mass, double cd) const {
-    StateVector cur = s;
-    for (double rem = total; rem > 0.0; rem -= step)
-        cur = rk4_step_drag(cur, std::min(step, rem), area, mass, cd);
-    return cur;
+                                        double total_seconds,
+                                        double step_size,
+                                        double area, double mass, double cd, double cr,
+                                        bool with_drag, double mjd0) const {
+    StateVector curr = s;
+    double rem = total_seconds;
+    int steps_taken = 0;
+    while (rem > 0) {
+        double dt = std::min(step_size, rem);
+        if (with_drag) {
+            curr = rk4_step_drag(curr, dt, area, mass, cd, cr, mjd0, steps_taken);
+        } else {
+            curr = rk4_step(curr, dt, mjd0, steps_taken);
+        }
+        rem -= dt;
+        steps_taken++;
+    }
+    return curr;
 }
 
-// ── Batch propagation (flat double array, modified in-place) ─────────────────
-void Propagator::propagate_batch(double* states, int n,
-                                  double dt, int steps) const {
-#ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic, 16)
-#endif
+// ── Batch API (Raw Pointers + OpenMP) ───────────────────────────────────────
+void Propagator::propagate_batch(double* states_inout, int n,
+                                 double dt_seconds, int steps, double mjd0) const {
+    #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
         StateVector s;
-        for (int k = 0; k < 6; ++k) s[k] = states[i*6 + k];
-        for (int step = 0; step < steps; ++step)
-            s = rk4_step(s, dt);
-        for (int k = 0; k < 6; ++k) states[i*6 + k] = s[k];
+        std::memcpy(s.raw(), &states_inout[i * 6], 6 * sizeof(double));
+        for (int step = 0; step < steps; ++step) {
+            s = rk4_step(s, dt_seconds, mjd0, step);
+        }
+        std::memcpy(&states_inout[i * 6], s.raw(), 6 * sizeof(double));
     }
 }
 
-void Propagator::propagate_batch_drag(double* states, int n,
-                                       double dt, int steps,
-                                       double area, double mass, double cd) const {
-#ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic, 16)
-#endif
+void Propagator::propagate_batch_drag(double* states_inout, int n,
+                                      double dt_seconds, int steps,
+                                      double area, double mass, double cd, double cr, double mjd0) const {
+    #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
         StateVector s;
-        for (int k = 0; k < 6; ++k) s[k] = states[i*6 + k];
-        for (int step = 0; step < steps; ++step)
-            s = rk4_step_drag(s, dt, area, mass, cd);
-        for (int k = 0; k < 6; ++k) states[i*6 + k] = s[k];
+        std::memcpy(s.raw(), &states_inout[i * 6], 6 * sizeof(double));
+        for (int step = 0; step < steps; ++step) {
+            s = rk4_step_drag(s, dt_seconds, area, mass, cd, cr, mjd0, step);
+        }
+        std::memcpy(&states_inout[i * 6], s.raw(), 6 * sizeof(double));
     }
 }
 
-// ── Python-friendly batch wrappers ────────────────────────────────────────────
+// ── Python-Friendly Batch API (std::vector) ─────────────────────────────────
 std::vector<StateVector> Propagator::batch_propagate_steps(
-        const std::vector<StateVector>& states, double dt, int steps) const {
-    std::vector<StateVector> out = states;
-    int n = (int)out.size();
-    std::vector<double> flat(n * 6);
-    for (int i = 0; i < n; ++i)
-        for (int k = 0; k < 6; ++k) flat[i*6+k] = out[i][k];
-    propagate_batch(flat.data(), n, dt, steps);
-    for (int i = 0; i < n; ++i)
-        for (int k = 0; k < 6; ++k) out[i][k] = flat[i*6+k];
-    return out;
+        const std::vector<StateVector>& states,
+        double dt_seconds, int steps, double mjd0) const {
+    std::vector<StateVector> res = states;
+    #pragma omp parallel for
+    for (size_t i = 0; i < res.size(); ++i) {
+        for (int step = 0; step < steps; ++step) {
+            res[i] = rk4_step(res[i], dt_seconds, mjd0, step);
+        }
+    }
+    return res;
 }
 
 std::vector<StateVector> Propagator::batch_propagate_steps_drag(
-        const std::vector<StateVector>& states, double dt, int steps,
-        double area, double mass, double cd) const {
-    std::vector<StateVector> out = states;
-    int n = (int)out.size();
-    std::vector<double> flat(n * 6);
-    for (int i = 0; i < n; ++i)
-        for (int k = 0; k < 6; ++k) flat[i*6+k] = out[i][k];
-    propagate_batch_drag(flat.data(), n, dt, steps, area, mass, cd);
-    for (int i = 0; i < n; ++i)
-        for (int k = 0; k < 6; ++k) out[i][k] = flat[i*6+k];
-    return out;
+        const std::vector<StateVector>& states,
+        double dt_seconds, int steps,
+        double area, double mass, double cd, double cr, double mjd0) const {
+    std::vector<StateVector> res = states;
+    #pragma omp parallel for
+    for (size_t i = 0; i < res.size(); ++i) {
+        for (int step = 0; step < steps; ++step) {
+            res[i] = rk4_step_drag(res[i], dt_seconds, area, mass, cd, cr, mjd0, step);
+        }
+    }
+    return res;
 }
 
 void Propagator::batch_propagate_full_history(
         const double* initial_states, int n,
-        double dt, int steps, double* output_history) const {
-    
-    // Copy initial states to step 0
-    std::copy(initial_states, initial_states + n * 6, output_history);
+        double dt_seconds, int steps, double mjd0,
+        double* output_history) const {
+    #pragma omp parallel for
+    for (int i = 0; i < n; ++i) {
+        StateVector s;
+        std::memcpy(s.raw(), &initial_states[i * 6], 6 * sizeof(double));
+        std::memcpy(&output_history[0 * (n * 6) + i * 6], s.raw(), 6 * sizeof(double));
 
-    // Propagate step by step
-    for (int step = 0; step < steps; ++step) {
-        double* prev = &output_history[step * n * 6];
-        double* next = &output_history[(step + 1) * n * 6];
-        
-        // Copy prev to next to start
-        std::copy(prev, prev + n * 6, next);
-        
-        // Propagate in place
-        propagate_batch(next, n, dt, 1);
+        for (int step = 0; step < steps; ++step) {
+            s = rk4_step(s, dt_seconds, mjd0, step);
+            std::memcpy(&output_history[(step + 1) * (n * 6) + i * 6], s.raw(), 6 * sizeof(double));
+        }
     }
 }
 
@@ -275,42 +373,50 @@ PYBIND11_MODULE(physics_engine, m) {
     // Propagator
     py::class_<Propagator>(m, "Propagator")
         .def(py::init<>())
-        // Single-step
-        .def("propagate",       &Propagator::propagate)
-        .def("propagate_with_drag", &Propagator::propagate_with_drag,
-             py::arg("state"), py::arg("dt_seconds"),
-             py::arg("area"), py::arg("mass"), py::arg("cd"))
-        // Multi-step (returns final state)
-        .def("propagate_steps", &Propagator::propagate_steps,
-             py::arg("state"), py::arg("total_seconds"), py::arg("step_size") = 10.0)
-        .def("propagate_steps_drag", &Propagator::propagate_steps_drag,
-             py::arg("state"), py::arg("total_seconds"), py::arg("step_size"),
-             py::arg("area"), py::arg("mass"), py::arg("cd"))
-        // Batch propagation (N satellites × steps) — CPU parallel
-        .def("batch_propagate_steps", [](const Propagator& self, py::array_t<double> states, double dt, int steps) {
+        .def("propagate",
+            [](const Propagator& p, const std::array<double,6>& s, double dt, double mjd0) {
+                StateVector sv; for (int i=0;i<6;i++) sv[i]=s[i];
+                auto res = p.propagate(sv, dt, mjd0);
+                std::array<double,6> out; for (int i=0;i<6;i++) out[i]=res[i];
+                return out;
+            }, py::arg("state"), py::arg("dt_seconds"), py::arg("mjd0") = 0.0)
+        .def("propagate_with_drag",
+            [](const Propagator& p, const std::array<double,6>& s, double dt, double area, double mass, double cd, double cr, double mjd0) {
+                StateVector sv; for (int i=0;i<6;i++) sv[i]=s[i];
+                auto res = p.propagate_with_drag(sv, dt, area, mass, cd, cr, mjd0);
+                std::array<double,6> out; for (int i=0;i<6;i++) out[i]=res[i];
+                return out;
+            }, py::arg("state"), py::arg("dt_seconds"), py::arg("area"), py::arg("mass"), py::arg("cd"), py::arg("cr") = 1.5, py::arg("mjd0") = 0.0)
+        .def("propagate_steps",
+            [](const Propagator& p, const std::array<double,6>& s, double total, double step, double area, double mass, double cd, double cr, bool with_drag, double mjd0) {
+                StateVector sv; for (int i=0;i<6;i++) sv[i]=s[i];
+                auto res = p.propagate_steps(sv, total, step, area, mass, cd, cr, with_drag, mjd0);
+                std::array<double,6> out; for (int i=0;i<6;i++) out[i]=res[i];
+                return out;
+            }, py::arg("state"), py::arg("total_seconds"), py::arg("step_size"), py::arg("area") = 0.0, py::arg("mass") = 1.0, py::arg("cd") = 2.2, py::arg("cr") = 1.5, py::arg("with_drag") = false, py::arg("mjd0") = 0.0)
+        .def("batch_propagate_steps", [](const Propagator& self, py::array_t<double> states, double dt, int steps, double mjd0) {
             auto buf = states.request();
             if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
             int n = (int)buf.shape[0];
             double* ptr = (double*)buf.ptr;
             {
                 py::gil_scoped_release release;
-                self.propagate_batch(ptr, n, dt, steps);
+                self.propagate_batch(ptr, n, dt, steps, mjd0);
             }
             return states;
-        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"))
-        .def("batch_propagate_steps_drag", [](const Propagator& self, py::array_t<double> states, double dt, int steps,
-                                              double area, double mass, double cd) {
-            auto buf = states.request();
-            int n = (int)buf.shape[0];
-            double* ptr = (double*)buf.ptr;
-            {
+        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0)
+        .def("batch_propagate_steps_drag",
+            [](const Propagator& p, py::array_t<double> states, double dt, int steps, double area, double mass, double cd, double cr, double mjd0) {
+                py::buffer_info buf = states.request();
+                int n = buf.shape[0];
+                py::array_t<double> out({n, 6});
+                std::memcpy(out.mutable_data(), buf.ptr, n * 6 * sizeof(double));
+                
                 py::gil_scoped_release release;
-                self.propagate_batch_drag(ptr, n, dt, steps, area, mass, cd);
-            }
-            return states;
-        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
-           py::arg("area"), py::arg("mass"), py::arg("cd"))
-        .def("batch_propagate_full_history", [](const Propagator& self, py::array_t<double> states, double dt, int steps) {
+                p.propagate_batch_drag(static_cast<double*>(out.mutable_data()), n, dt, steps, area, mass, cd, cr, mjd0);
+                return out;
+            }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("area"), py::arg("mass"), py::arg("cd"), py::arg("cr") = 1.5, py::arg("mjd0") = 0.0)
+        .def("batch_propagate_full_history", [](const Propagator& self, py::array_t<double> states, double dt, int steps, double mjd0) {
             auto buf = states.request();
             int n = (int)buf.shape[0];
             double* in_ptr = (double*)buf.ptr;
@@ -321,10 +427,10 @@ PYBIND11_MODULE(physics_engine, m) {
 
             {
                 py::gil_scoped_release release;
-                self.batch_propagate_full_history(in_ptr, n, dt, steps, out_ptr);
+                self.batch_propagate_full_history(in_ptr, n, dt, steps, mjd0, out_ptr);
             }
             return history;
-        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+        }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
 
     // ConjunctionWarning
     py::class_<ConjunctionWarning>(m, "ConjunctionWarning")
@@ -353,8 +459,8 @@ PYBIND11_MODULE(physics_engine, m) {
             auto b_sat = sats.request(); auto b_deb = debs.request();
             int ns = (int)b_sat.shape[0], nd = (int)b_deb.shape[0];
             std::vector<StateVector> vs(ns), vd(nd);
-            for(int i=0; i<ns; i++) std::copy((double*)b_sat.ptr + i*6, (double*)b_sat.ptr + (i+1)*6, vs[i].begin());
-            for(int i=0; i<nd; i++) std::copy((double*)b_deb.ptr + i*6, (double*)b_deb.ptr + (i+1)*6, vd[i].begin());
+            for(int i=0; i<ns; i++) std::memcpy(vs[i].raw(), (double*)b_sat.ptr + i*6, 6*sizeof(double));
+            for(int i=0; i<nd; i++) std::memcpy(vd[i].raw(), (double*)b_deb.ptr + i*6, 6*sizeof(double));
             {
                 py::gil_scoped_release release;
                 return self.detect(vs, vd, lookahead, step, tle_age);
@@ -392,7 +498,7 @@ PYBIND11_MODULE(physics_engine, m) {
     m.def("cuda_device_count", &cuda_device_count);
     m.def("cuda_print_device_info", &cuda_print_device_info);
 
-    m.def("cuda_propagate_batch", [](py::array_t<double> states, double dt, int steps) {
+    m.def("cuda_propagate_batch", [](py::array_t<double> states, double dt, int steps, double mjd0) {
         auto buf = states.request();
         if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
         int n = (int)buf.shape[0];
@@ -400,43 +506,43 @@ PYBIND11_MODULE(physics_engine, m) {
         double* ptr = (double*)buf.ptr;
         {
             py::gil_scoped_release release;
-            cuda_propagate_batch(ptr, n, dt, steps);
+            cuda_propagate_batch(ptr, n, dt, steps, mjd0);
         }
         return states; // Return the same array since it was modified in-place
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
 
-    m.def("cuda_propagate_batch_soa", [](py::array_t<double> states, double dt, int steps) {
+    m.def("cuda_propagate_batch_soa", [](py::array_t<double> states, double dt, int steps, double mjd0) {
         auto buf = states.request();
         if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
         int n = (int)buf.shape[0];
         double* ptr = (double*)buf.ptr;
-        { py::gil_scoped_release release; cuda_propagate_batch_soa(ptr, n, dt, steps); }
+        { py::gil_scoped_release release; cuda_propagate_batch_soa(ptr, n, dt, steps, mjd0); }
         return states;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
 
-    m.def("cuda_propagate_batch_streamed", [](py::array_t<double> states, double dt, int steps) {
+    m.def("cuda_propagate_batch_streamed", [](py::array_t<double> states, double dt, int steps, double mjd0) {
         auto buf = states.request();
         if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
         int n = (int)buf.shape[0];
         double* ptr = (double*)buf.ptr;
-        { py::gil_scoped_release release; cuda_propagate_batch_streamed(ptr, n, dt, steps); }
+        { py::gil_scoped_release release; cuda_propagate_batch_streamed(ptr, n, dt, steps, mjd0); }
         return states;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
 
     m.def("cuda_propagate_batch_drag", [](py::array_t<double> states, double dt, int steps, 
-                                          double area, double mass, double cd) {
+                                          double area, double mass, double cd, double cr, double mjd0) {
         auto buf = states.request();
         int n = (int)buf.shape[0];
         double* ptr = (double*)buf.ptr;
         {
             py::gil_scoped_release release;
-            cuda_propagate_batch_drag(ptr, n, dt, steps, area, mass, cd);
+            cuda_propagate_batch_drag(ptr, n, dt, steps, area, mass, cd, cr, mjd0);
         }
         return states;
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"),
-       py::arg("area"), py::arg("mass"), py::arg("cd"));
+       py::arg("area"), py::arg("mass"), py::arg("cd"), py::arg("cr") = 1.5, py::arg("mjd0") = 0.0);
 
-    m.def("cuda_propagate_full_history", [](py::array_t<double> states, double dt, int steps) {
+    m.def("cuda_propagate_full_history", [](py::array_t<double> states, double dt, int steps, double mjd0) {
         auto buf = states.request();
         int n = (int)buf.shape[0];
         double* in_ptr = (double*)buf.ptr;
@@ -448,20 +554,20 @@ PYBIND11_MODULE(physics_engine, m) {
 
         {
             py::gil_scoped_release release;
-            cuda_propagate_full_history(in_ptr, n, dt, steps, out_ptr);
+            cuda_propagate_full_history(in_ptr, n, dt, steps, mjd0, out_ptr);
         }
         return history;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"));
+    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
 
     m.def("cuda_detect_conjunctions", [](py::array_t<double> sats, py::array_t<double> debs, 
-                                        double lookahead, double step) {
+                                        double lookahead, double step, double mjd0) {
         auto b_sat = sats.request(); auto b_deb = debs.request();
         int ns = (int)b_sat.shape[0], nd = (int)b_deb.shape[0];
         {
             py::gil_scoped_release release;
-            return cuda_detect_conjunctions((double*)b_sat.ptr, ns, (double*)b_deb.ptr, nd, lookahead, step);
+            return cuda_detect_conjunctions((double*)b_sat.ptr, ns, (double*)b_deb.ptr, nd, lookahead, step, mjd0);
         }
     }, py::arg("sat_states"), py::arg("debris_states"),
-       py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0);
+       py::arg("lookahead_s") = 86400.0, py::arg("step_s") = 60.0, py::arg("mjd0") = 0.0);
 #endif
 }
