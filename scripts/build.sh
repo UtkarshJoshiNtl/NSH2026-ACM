@@ -8,7 +8,8 @@ mkdir -p build
 cd build
 
 echo "==> Configuring CMake ..."
-cmake .. -DCMAKE_BUILD_TYPE=Release "$@"
+PYBIND11_DIR=$(python3 -c "import pybind11; print(pybind11.get_cmake_dir())")
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$PYBIND11_DIR" "$@"
 
 echo "==> Building ..."
 make -j"$(nproc)"
