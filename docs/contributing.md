@@ -297,10 +297,7 @@ This helps align on direction before significant implementation effort.
 
 ## Recognition
 
-Contributors are recognized in:
-- [CONTRIBUTORS.md](CONTRIBUTORS.md) (for substantial contributions)
-- Release notes for each version
-- GitHub contributor graph
+Contributors are recognized in release notes for each version and the GitHub contributor graph.
 
 ---
 

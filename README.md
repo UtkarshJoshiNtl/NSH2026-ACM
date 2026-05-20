@@ -117,6 +117,12 @@ For details: [docs/architecture.md](docs/architecture.md)
 
 **Full validation suite:** [docs/validation.md](docs/validation.md)
 
+### Validation Gallery
+
+| Energy Conservation | SGP4 Comparison | CUDA Crossover |
+| :---: | :---: | :---: |
+| ![Energy](validation/plots/1_energy_conservation.png) | ![SGP4](validation/plots/2_sgp4_comparison.png) | ![Crossover](validation/plots/7_cuda_crossover.png) |
+
 ---
 
 ## 🛠 Quick Start
@@ -196,7 +202,8 @@ python main.py conjunction --catalog data/tle.txt --output risks.csv
 | [docs/performance.md](docs/performance.md) | Benchmarks, scaling, memory layout, kernel occupancy |
 | [docs/profiling.md](docs/profiling.md) | CUDA profiling, roofline analysis, performance optimization |
 | [docs/validation.md](docs/validation.md) | Physics verification, test cases, validation methodology, references |
-| [DESIGN.md](DESIGN.md) | Design tradeoffs (RK4 vs. adaptive, J2–J4 vs. full EGM2008, etc.) |
+| [docs/design.md](docs/design.md) | Design tradeoffs (RK4 vs. adaptive, J2–J4 vs. full EGM2008, etc.) |
+| [docs/contributing.md](docs/contributing.md) | Development setup, testing, contribution guidelines |
 
 ---
 
@@ -266,13 +273,13 @@ Areas of interest:
 - Backends (Vulkan, HIP, SYCL)
 - Applications (debris tracking, launch windows, re-entry analysis)
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and standards.
+See [docs/contributing.md](docs/contributing.md) for setup and standards.
 
 ---
 
 ## 📄 License
 
-MIT License. Free for academic, research, and commercial use.
+MIT License. Free for academic, research, and commercial use. See [LICENSE](LICENSE).
 
 ---
 

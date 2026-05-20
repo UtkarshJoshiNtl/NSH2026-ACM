@@ -24,7 +24,7 @@ Adaptive methods must store internal state (k values, error estimate, step histo
 
 RK4 with `dt=10s` for circular LEO:
 - Local truncation error: O(dt⁵) ≈ 10⁻¹³ km per step
-- Global error after 24h: O(dt⁴) ≈ 10⁻⁷ relative energy drift (verified — see validation/plots/1_energy_conservation.png)
+- Global error after 24h: O(dt⁴) ≈ 10⁻⁷ relative energy drift (verified — see [validation/plots/1_energy_conservation.png](../validation/plots/1_energy_conservation.png))
 
 For conjunction analysis, position accuracy of <0.1 km at 24h suffices (TLE uncertainty itself is 0.1–1 km). RK4 at dt=10s is well within this margin.
 
@@ -73,7 +73,7 @@ J2 through J4 captures >99.97% of the gravitational perturbation with just 3 ext
 
 However, the GPU advantage becomes massive for **all-pairs conjunction screening**. In this compute-bound regime, the CUDA engine provides an **82.8× speedup** over C++ for 400x400 pairs (160k combinations), proving that acceleration is best applied to the most compute-intensive analysis phases rather than simple state integration.
 
-The crossover plot (`validation/plots/7_cuda_crossover.png`) shows this as the intersection of the C++ and CUDA timing curves on a log-log scale.
+The crossover plot ([validation/plots/7_cuda_crossover.png](../validation/plots/7_cuda_crossover.png)) shows this as the intersection of the C++ and CUDA timing curves on a log-log scale.
 
 **The SoA advantage:** Switching from AoS to SoA layout shifts the crossover to ~200 satellites by reducing memory transaction waste. All warp accesses hit a contiguous cache line instead of striding across a 48-byte struct.
 
@@ -104,7 +104,7 @@ This means future optimisation should focus on:
 - Tensor core exploitation (requires FP16/TF32, inappropriate for orbital mechanics)
 - Increasing occupancy via register pressure reduction
 
-The roofline plot is saved to `validation/plots/8_roofline.png`.
+The roofline plot is saved to [validation/plots/8_roofline.png](../validation/plots/8_roofline.png).
 
 ---
 
@@ -175,11 +175,11 @@ Position uncertainty is estimated from TLE age: `σ ≈ 0.3 × sqrt(TLE_age_days
 3. **Scalable architecture**: Same code runs on laptops and supercomputers
 4. **Open science**: All methods, benchmarks, and validation are reproducible
 
-**For researchers:** The [validation/](validation/) directory contains all verification code. Reproduce our results or extend the physics models.
+**For researchers:** The [validation/](../validation/) directory contains all verification code. Reproduce our results or extend the physics models.
 
-**For operators:** The [engine/](engine/) provides a stable API for integration into operational systems.
+**For operators:** The [engine/](../engine/) provides a stable API for integration into operational systems.
 
-**For contributors:** See [README.md](README.md) for development setup and contribution guidelines.
+**For contributors:** See [README.md](../README.md) for development setup and contribution guidelines.
 
 ---
 

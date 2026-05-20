@@ -1,11 +1,22 @@
-# CMake
+# Cache & generated data
+.cache/
+
+# C++/CMake build artifacts
 backend/cpp/build/
+cpp/build/
+*.so
+*.dylib
+*.dll
 
 # Python
 venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # OS
 .DS_Store
-cpp/build/
+
+# IDE
+.vscode/
+.idea/
