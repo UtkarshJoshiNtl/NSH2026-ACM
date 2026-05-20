@@ -1,19 +1,22 @@
 import sys
 import math
-import traceback
 
 import glfw
 import moderngl as mgl
 import numpy as np
 
 from frontend.camera import ArcballCamera
-from frontend.globe import Globe
+from frontend.globe import Globe, EARTH_OMEGA
 from frontend.hud import HUD
 from frontend.scene import SceneManager
 
 
 WIDTH, HEIGHT = 1280, 800
 TITLE = "Astrosis — Orbital Mechanics Engine"
+
+# Visual spin multiplier so rotation is perceptible in real time
+# 120x sidereal rate → one full rotation ≈ 12 min of wall time
+_GLOBE_VISUAL_RATE = EARTH_OMEGA * 120.0
 
 
 def main():
@@ -36,18 +39,19 @@ def main():
     glfw.swap_interval(1)
 
     ctx = mgl.create_context()
-    ctx.enable(mgl.DEPTH_TEST | mgl.BLEND)
-    ctx.blend_func = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
-    ctx.clear_color = 0.02, 0.02, 0.05, 1.0
+    ctx.enable(mgl.DEPTH_TEST | mgl.BLEND | mgl.PROGRAM_POINT_SIZE)
+    ctx.blend_func   = mgl.SRC_ALPHA, mgl.ONE_MINUS_SRC_ALPHA
+    ctx.clear_color  = 0.01, 0.01, 0.03, 1.0
 
-    camera = ArcballCamera(distance=20.0)
-    globe = Globe(ctx)
-    hud = HUD(ctx, (WIDTH, HEIGHT))
+    camera    = ArcballCamera(distance=20.0)
+    globe     = Globe(ctx)
+    hud       = HUD(ctx, (WIDTH, HEIGHT))
     scene_mgr = SceneManager(ctx, hud)
 
-    mouse_last = [0.0, 0.0]
+    mouse_last    = [0.0, 0.0]
     mouse_pressed = False
-    fb_w, fb_h = glfw.get_framebuffer_size(window)
+    fb_w, fb_h    = glfw.get_framebuffer_size(window)
+    globe_angle   = 0.0
 
     def scroll_cb(w, xoff, yoff):
         camera.zoom(yoff)
@@ -73,9 +77,9 @@ def main():
             scene_mgr.activate(2)
         elif key == glfw.KEY_SPACE:
             scene_mgr.pause_toggle()
-        elif key == glfw.KEY_EQUAL or key == glfw.KEY_KP_ADD:
+        elif key in (glfw.KEY_EQUAL, glfw.KEY_KP_ADD):
             scene_mgr.speed_up()
-        elif key == glfw.KEY_MINUS or key == glfw.KEY_KP_SUBTRACT:
+        elif key in (glfw.KEY_MINUS, glfw.KEY_KP_SUBTRACT):
             scene_mgr.speed_down()
         elif key == glfw.KEY_R:
             camera.reset()
@@ -87,14 +91,17 @@ def main():
 
     while not glfw.window_should_close(window):
         curr_time = glfw.get_time()
-        dt = min(curr_time - prev_time, 0.1)
+        dt        = min(curr_time - prev_time, 0.1)
         prev_time = curr_time
+
+        # Globe auto-rotation (visually accelerated sidereal rate)
+        globe_angle += _GLOBE_VISUAL_RATE * dt
 
         x, y = glfw.get_cursor_pos(window)
         if glfw.get_mouse_button(window, glfw.MOUSE_BUTTON_LEFT) == glfw.PRESS:
             if not mouse_pressed:
                 mouse_pressed = True
-                mouse_last = [x, y]
+                mouse_last    = [x, y]
             else:
                 dx, dy = x - mouse_last[0], y - mouse_last[1]
                 camera.orbit(dx, dy)
@@ -110,10 +117,10 @@ def main():
 
         proj = camera.projection_matrix(aspect)
         view = camera.view_matrix()
-        eye = camera.eye
+        eye  = camera.eye
 
         hud.render_stars(proj, view)
-        globe.render(proj, view, eye)
+        globe.render(proj, view, eye, globe_angle)
         scene_mgr.render(proj, view, eye)
         hud.render(scene_mgr.get_hud_lines())
 

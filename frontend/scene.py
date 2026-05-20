@@ -72,7 +72,7 @@ class _TrailRenderer:
         if self._vao is None:
             return
         mvp = (proj @ view).astype(np.float32)
-        self.prog['u_mvp'].write(mvp.tobytes())
+        self.prog['u_mvp'].write(mvp.T.tobytes())
         self.prog['u_color'].write(np.array(color, dtype=np.float32).tobytes())
         self._vao.render(mgl.LINE_STRIP)
 
@@ -82,7 +82,7 @@ class _TrailRenderer:
         pos = np.array(pos_km, dtype=np.float32) * SCALE
         self._dot_vbo.write(pos.tobytes())
         mvp = (proj @ view).astype(np.float32)
-        self.dot_prog['u_mvp'].write(mvp.tobytes())
+        self.dot_prog['u_mvp'].write(mvp.T.tobytes())
         self.dot_prog['u_size'] = size
         self.dot_prog['u_color'].write(np.array(color, dtype=np.float32).tobytes())
         self._dot_vao.render(mgl.POINTS)
@@ -129,8 +129,8 @@ class _SphereRenderer:
         ], dtype=np.float32)
         sp = self.prog
         full_mvp = (proj @ view @ model).astype(np.float32)
-        sp['u_mvp'].write(full_mvp.tobytes())
-        sp['u_model'].write(model.tobytes())
+        sp['u_mvp'].write(full_mvp.T.tobytes())
+        sp['u_model'].write(model.T.tobytes())
         sp['u_color'].write(np.array(color, dtype=np.float32).tobytes())
         sp['u_light_dir'].write(self._light_dir.tobytes())
         sp['u_view_pos'].write(np.array(view_pos, dtype=np.float32).tobytes())

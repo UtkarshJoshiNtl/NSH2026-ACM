@@ -34,18 +34,32 @@ out vec4 frag_color;
 
 void main() {
     vec3 tex_color = texture(u_texture, v_uv).rgb;
-    vec3 normal = normalize(v_normal);
+    vec3 normal    = normalize(v_normal);
     vec3 light_dir = normalize(u_light_dir);
+    vec3 view_dir  = normalize(u_view_pos - v_frag_pos);
 
-    float ambient = 0.35;
-    float diff = max(dot(normal, light_dir), 0.0);
+    float diff    = max(dot(normal, light_dir), 0.0);
+    float ambient = 0.08;
 
-    vec3 view_dir = normalize(u_view_pos - v_frag_pos);
+    // Night-side city-lights hint: very faint warm glow on dark side
+    float dark = 1.0 - clamp(diff * 4.0, 0.0, 1.0);
+    vec3 night_glow = vec3(0.12, 0.09, 0.04) * dark * 0.35;
+
+    // Specular: ocean pixels (low red, mid-high blue) are shinier
+    float ocean_mask = clamp((tex_color.b - tex_color.r) * 3.0, 0.0, 1.0);
     vec3 reflect_dir = reflect(-light_dir, normal);
-    float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0) * 0.15;
+    float spec_base  = pow(max(dot(view_dir, reflect_dir), 0.0), 64.0);
+    float spec       = spec_base * (0.08 + ocean_mask * 0.55);
 
-    vec3 result = tex_color * (ambient + diff * 0.65) + vec3(spec);
-    frag_color = vec4(result, 1.0);
+    // Limb darkening
+    float ndotv      = max(dot(normal, view_dir), 0.0);
+    float limb       = pow(ndotv, 0.4);
+
+    vec3 result = tex_color * (ambient + diff * 0.92) * limb
+                + vec3(spec)
+                + night_glow;
+
+    frag_color = vec4(clamp(result, 0.0, 1.0), 1.0);
 }
 """
 
@@ -78,11 +92,18 @@ uniform vec3 u_view_pos;
 out vec4 frag_color;
 
 void main() {
-    vec3 normal = normalize(v_normal);
+    vec3 normal   = normalize(v_normal);
     vec3 view_dir = normalize(u_view_pos - v_frag_pos);
-    float fresnel = 1.0 - max(dot(normal, view_dir), 0.0);
-    float alpha = pow(fresnel, 3.0) * 0.35;
-    frag_color = vec4(0.25, 0.55, 1.0, alpha);
+    float ndotv   = max(dot(normal, view_dir), 0.0);
+    float fresnel = 1.0 - ndotv;
+
+    // Two-tone scatter: core is pale blue, rim is deeper violet-blue
+    float rim = pow(fresnel, 2.5);
+    float core_halo = pow(fresnel, 5.0);
+    vec3 scatter_color = mix(vec3(0.28, 0.58, 1.0), vec3(0.12, 0.28, 0.80), rim);
+    float alpha = rim * 0.50 + core_halo * 0.20;
+
+    frag_color = vec4(scatter_color, clamp(alpha, 0.0, 0.65));
 }
 """
 
@@ -110,7 +131,7 @@ uniform vec3 u_color;
 out vec4 frag_color;
 
 void main() {
-    frag_color = vec4(u_color, v_alpha * 0.8);
+    frag_color = vec4(u_color, v_alpha * 0.85);
 }
 """
 
@@ -137,8 +158,12 @@ void main() {
     vec2 coord = gl_PointCoord - vec2(0.5);
     float dist = length(coord);
     if (dist > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.0, dist);
-    frag_color = vec4(u_color, alpha * 0.9);
+    // Bright core + soft halo
+    float core  = 1.0 - smoothstep(0.0, 0.18, dist);
+    float halo  = smoothstep(0.5, 0.1, dist);
+    float alpha = clamp(core * 0.9 + halo * 0.5, 0.0, 1.0);
+    vec3 col    = mix(vec3(1.0), u_color, smoothstep(0.0, 0.3, dist));
+    frag_color  = vec4(col, alpha);
 }
 """
 
@@ -168,29 +193,39 @@ void main() {
 }
 """
 
+# Stars: per-vertex position (3f) + size (1f) + color (3f)
 STAR_VERT = """
 #version 330 core
 in vec3 in_position;
+in float in_size;
+in vec3 in_color;
 
 uniform mat4 u_mvp;
-uniform float u_size;
+
+out vec3 v_color;
 
 void main() {
-    gl_Position = u_mvp * vec4(in_position, 1.0);
-    gl_PointSize = u_size;
+    gl_Position  = u_mvp * vec4(in_position, 1.0);
+    gl_PointSize = in_size;
+    v_color      = in_color;
 }
 """
 
 STAR_FRAG = """
 #version 330 core
+in vec3 v_color;
 out vec4 frag_color;
 
 void main() {
-    vec2 coord = gl_PointCoord - vec2(0.5);
-    float dist = length(coord);
+    vec2  coord = gl_PointCoord - vec2(0.5);
+    float dist  = length(coord);
     if (dist > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.0, dist) * 0.8;
-    frag_color = vec4(1.0, 1.0, 1.0, alpha);
+    // Bright pinpoint core blending to soft halo
+    float core  = 1.0 - smoothstep(0.0, 0.15, dist);
+    float halo  = smoothstep(0.5, 0.05, dist);
+    float alpha = clamp(core * 1.0 + halo * 0.55, 0.0, 1.0) * 0.88;
+    vec3  col   = mix(v_color, vec3(1.0), core * 0.6);
+    frag_color  = vec4(col, alpha);
 }
 """
 
@@ -226,11 +261,15 @@ uniform float u_alpha;
 out vec4 frag_color;
 
 void main() {
-    vec3 normal = normalize(v_normal);
+    vec3 normal    = normalize(v_normal);
     vec3 light_dir = normalize(u_light_dir);
-    float ambient = 0.3;
-    float diff = max(dot(normal, light_dir), 0.0);
-    vec3 result = u_color * (ambient + diff * 0.7);
-    frag_color = vec4(result, u_alpha);
+    float ambient  = 0.25;
+    float diff     = max(dot(normal, light_dir), 0.0);
+    // Rim / fresnel glow
+    vec3 view_dir  = normalize(u_view_pos - v_frag_pos);
+    float rim      = 1.0 - max(dot(normal, view_dir), 0.0);
+    rim            = pow(rim, 3.0) * 0.4;
+    vec3 result    = u_color * (ambient + diff * 0.75) + u_color * rim;
+    frag_color     = vec4(clamp(result, 0.0, 1.0), u_alpha);
 }
 """
