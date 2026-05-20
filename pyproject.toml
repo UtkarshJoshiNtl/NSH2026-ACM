@@ -13,4 +13,7 @@ dependencies = [
     "scipy>=1.13.0",
     "httpx>=0.27.0",
     "sgp4>=2.23",
+    "moderngl>=5.0",
+    "glfw>=2.0",
+    "Pillow>=10.0",
 ]

@@ -23,6 +23,7 @@ Astrosis is an **engineering-grade orbital simulation engine** designed for high
 - 🌍 **Coordinate systems**: ECI, ECEF, LLA, Topocentric with proper transformations
 - 🎯 **Conjunction analysis**: Rapid all-pairs screening with TCA refinement
 - 📈 **Proven accuracy**: Energy conservation < 1e-7 over 24 hours
+- 🖥️ **Native 3D visualization**: GPU-accelerated real-time orbits (Python + ModernGL)
 
 ---
 
@@ -48,7 +49,7 @@ Astrosis is an **engineering-grade orbital simulation engine** designed for high
 ## 🏗 Architecture
 
 ```
-┌─ User API (Python / REST / CLI)
+┌─ User API (Python / CLI / Native Viz)
 │
 ├─ Core Simulation Engine
 │  ├─ Physics: Propagation, Maneuver, Conjunction, Fuel
@@ -155,28 +156,34 @@ cd ../..
 python main.py fetch --id 25544  # Fetch ISS TLE
 python main.py passes --id 25544 --lat 40.7 --lon -74.0  # NYC passes
 
-# 5. Launch visualization
-python frontend/main.py  # Opens browser
-```
+# 5. Launch native 3D visualization
+python -m frontend.main  # Opens GLFW window (no browser needed)
+
+   Controls: 1/2/3 switch scenes · Drag to orbit · Scroll to zoom
+             Space pause · +/- speed · R reset camera · Esc quit
 
 ### Python API Example
 
 ```python
-from engine.simulation import SimulationContext
+from engine.io.data import tle_ingestor
+from engine.core.accelerator import propagate_batch, propagate_batch_full_history
+from sgp4.api import Satrec
 
-sim = SimulationContext()
+# Fetch live TLE
+sats = tle_ingestor.get_satellites("25544")  # ISS
 
-# Load satellite
-sat = sim.load_tle("25544")  # ISS
+# Propagate with SGP4
+sat = Satrec.twoline2rv(sats[0]["line1"], sats[0]["line2"])
+e, r, v = sat.sgp4(int(sat.jdsatepoch), sat.jdsatepochF)
 
-# Propagate 24 hours at 60-second intervals
-trajectory = sim.propagate(sat, hours=24, dt_seconds=60)
+# Propagate with full physics (numerical integration)
+state = [*r, *v]  # [x, y, z, vx, vy, vz]
+trajectory = propagate_batch([state], dt_seconds=60, steps=1440)
 
-# Find conjunctions
-conjunctions = sim.conjunction_assessment([sat1, sat2, sat3])
-
-# Plan maneuver
-maneuver = sim.plan_hohmann_transfer(sat, target_sma_km=42164)
+# Batch conjunction screening
+from engine.core.conjunction import ConjunctionDetector
+detector = ConjunctionDetector()
+warnings = detector.detect(sat_states, debris_states, lookahead_s=86400)
 ```
 
 ### Command-Line Examples
@@ -258,7 +265,7 @@ python validation/test_monte_carlo.py --cases 100 --hours 72
 The API is subject to change before v1.0:
 - Core propagation / conjunction: Stable
 - Maneuver planning: May extend with constraints/optimization
-- REST endpoints: May change paths/parameters
+- Visualization: Native window (ModernGL); may add scenes
 - Data formats: May add compression/streaming
 
 See [docs/architecture.md](docs/architecture.md#api-stability--versioning) for versioning plan.
@@ -299,8 +306,8 @@ MIT License. Free for academic, research, and commercial use. See [LICENSE](LICE
 
 **Tools:**
 - Skyfield (astronomical calculations)
-- Three.js (visualization)
-- FastAPI (REST framework)
+- ModernGL (GPU-accelerated rendering)
+- GLFW (windowing)
 
 ---
 

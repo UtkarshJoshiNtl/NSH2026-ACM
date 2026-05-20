@@ -21,6 +21,10 @@ pip install -r requirements.txt
 
 # Install development tools
 pip install pytest black flake8 mypy
+
+# Frontend visualization (optional)
+pip install moderngl glfw Pillow
+# Then run: python -m frontend.main
 ```
 
 ### Build C++/CUDA Backends (Optional)
@@ -189,7 +193,8 @@ def propagate(initial_state: np.ndarray, timestep: float, hours: int) -> np.ndar
 - [ ] Re-entry prediction tool
 - [ ] Debris propagation module
 - [ ] Mega-constellation analyzer
-- [ ] Live tracking dashboard improvements
+- [ ] Live tracking dashboard (new scenes for the native viz)
+- [ ] Custom satellite selection UI in the native window
 
 ### Documentation (Easy)
 
