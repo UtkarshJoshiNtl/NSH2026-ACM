@@ -1,11 +1,4 @@
-"""Astrosis engine package.
-
-Keep this module light: importing `engine` should not eagerly pull in the core
-physics backend, TLE ingestion, or validation helpers.
-"""
-
 from __future__ import annotations
-
 from importlib import import_module
 
 from .constants import (
@@ -27,7 +20,6 @@ __all__ = [
 _LAZY_EXPORTS = {
     "rk4_step": (".core", "rk4_step"),
     "rk4_batch": (".core", "rk4_batch"),
-    "propagate_batch_numpy": (".core", "propagate_batch_numpy"),
     "ConjunctionDetector": (".core", "ConjunctionDetector"),
     "ConjunctionWarning": (".core", "ConjunctionWarning"),
     "ManeuverCalculator": (".core", "ManeuverCalculator"),
@@ -37,14 +29,14 @@ _LAZY_EXPORTS = {
     "propagate_batch": (".core", "propagate_batch"),
     "detect_conjunctions": (".core", "detect_conjunctions"),
     "backend_info": (".core", "backend_info"),
-    "core_sun_position_eci": (".core", "sun_position_eci"),
-    "core_moon_position_eci": (".core", "moon_position_eci"),
+    "sun_position_eci_mjd": (".core", "sun_position_eci"),
+    "sun_position_eci": (".geo", "sun_position_eci"),
+    "moon_position_eci": (".core", "moon_position_eci"),
     "gmst_from_datetime": (".geo", "gmst_from_datetime"),
     "eci_to_ecef": (".geo", "eci_to_ecef"),
     "ecef_to_geodetic": (".geo", "ecef_to_geodetic"),
     "geodetic_to_ecef": (".geo", "geodetic_to_ecef"),
     "topocentric_aer": (".geo", "topocentric_aer"),
-    "sun_position_eci": (".geo", "sun_position_eci"),
     "check_eclipse": (".geo", "check_eclipse"),
     "is_optically_visible": (".geo", "is_optically_visible"),
     "report_passes": (".geo", "report_passes"),
@@ -61,4 +53,3 @@ def __getattr__(name: str):
     value = getattr(module, attr_name)
     globals()[name] = value
     return value
-

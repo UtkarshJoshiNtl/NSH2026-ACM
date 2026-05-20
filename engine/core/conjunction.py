@@ -1,21 +1,12 @@
-"""
-astrosis/physics/conjunction.py — Space Traffic Management Logic
-================================================================
-Identifies close approaches between objects using:
-  - Full temporal sweep with pre-propagated history
-  - Brent's method for sub-step TCA refinement (< 1 s accuracy)
-  - ADVISORY / WARNING / CRITICAL severity tiers
-  - Chan's Probability of Collision (simplified 2D Gaussian)
-  - State covariance estimated from TLE age
-"""
-
 import math
 from dataclasses import dataclass, field
 from typing import List, Optional
 import numpy as np
 
 from .propagator import rk4_step, propagate_batch_numpy
-from ..constants import CRITICAL_DISTANCE, WARNING_DISTANCE, ADVISORY_DISTANCE
+from ..constants import CRITICAL_DISTANCE, WARNING_DISTANCE, ADVISORY_DISTANCE, RE
+
+__all__ = ["PcResult", "ConjunctionWarning", "ConjunctionDetector"]
 
 
 @dataclass
@@ -29,8 +20,8 @@ class PcResult:
 class ConjunctionWarning:
     sat_id: int = 0
     debris_id: int = 0
-    current_distance: float = 0.0   # km at TCA (Brent-refined)
-    time_to_closest_approach: float = 0.0  # s
+    current_distance: float = 0.0
+    time_to_closest_approach: float = 0.0
     severity: str = "NONE"
     relative_velocity: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     pc_result: PcResult = field(default_factory=PcResult)
@@ -41,10 +32,6 @@ class ConjunctionWarning:
 
 
 def _brent_minimise(f, a: float, b: float, tol: float = 0.1) -> float:
-    """
-    Brent's parabolic interpolation method to minimise f over [a, b].
-    Converges super-linearly, guaranteed to find minimum in O(log(1/tol)) steps.
-    """
     GOLDEN = 0.3819660
     x = w = v = a + GOLDEN * (b - a)
     fx = fw = fv = f(x)
@@ -98,14 +85,6 @@ def _brent_minimise(f, a: float, b: float, tol: float = 0.1) -> float:
 
 def _chan_pc(miss_dist_km: float, sigma_r_km: float,
              rel_speed_km_s: float, hbr_km: float = 0.01) -> PcResult:
-    """
-    Chan's method (1997) Probability of Collision.
-    Uses the circular encounter approximation for the 2D Gaussian integral:
-        Pc ≈ (HBR² / 2σ²) * exp(-x²/2)    where x = miss_dist / sigma_r
-
-    Valid when miss_dist >> sigma_r (dilute encounter regime, most LEO CDMs).
-    HBR (hard-body radius) defaults to 10 m for a typical small satellite.
-    """
     r = PcResult()
     r.sigma_pos_km = sigma_r_km
     if sigma_r_km <= 0 or rel_speed_km_s <= 0:
@@ -117,9 +96,6 @@ def _chan_pc(miss_dist_km: float, sigma_r_km: float,
 
 
 class ConjunctionDetector:
-    def __init__(self):
-        pass
-
     def detect(
         self,
         sat_states: List[List[float]],
@@ -129,25 +105,13 @@ class ConjunctionDetector:
         tle_age_days: float = 1.0,
         mjd0: float = 0.0,
     ) -> List[ConjunctionWarning]:
-        """
-        Detect potential collisions within a lookahead window.
-
-        Uses KDTree for O(N log N) broad-phase culling, then a temporal sweep
-        over pre-propagated history, then Brent's method for TCA refinement.
-
-        tle_age_days controls the position covariance estimate:
-            σ_pos ≈ 0.3 * sqrt(tle_age_days)  [km]
-        """
         if not sat_states or not debris_states:
             return []
 
-        # 1. Broad Phase: initial-position KDTree cull
-        # We cannot rely on t=0 distance alone (pairs may converge), but it
-        # eliminates pairs on opposite sides of Earth (> 12,000 km apart).
         sat_pos = [s[:3] for s in sat_states]
         deb_pos = [d[:3] for d in debris_states]
-        # Conservative radius: LEO relative velocity ~15 km/s × lookahead; cap at Earth diameter
-        broad_radius = min(15.0 * lookahead_s, 12742.0)
+        broad_radius = min(15.0 * lookahead_s, 2 * RE)
+
         try:
             from scipy.spatial import KDTree
             tree = KDTree(deb_pos)
@@ -165,14 +129,11 @@ class ConjunctionDetector:
                         candidate_list.append(deb_idx)
                 candidates.append(candidate_list)
 
-        # 2. Pre-propagate all satellites and debris (batch RK4)
         n_steps = int(lookahead_s / step_s)
         remainder_s = lookahead_s - n_steps * step_s
         sample_times = [step * step_s for step in range(n_steps + 1)]
 
-        # Lazy import from accelerator to avoid module-level circular dependency
         from .accelerator import propagate_batch_full_history
-        # Pass mjd0 to ensure history matches high-fidelity requirements if mjd0 > 0
         all_sats = propagate_batch_full_history(sat_states, step_s, n_steps, mjd0=mjd0)
         all_debs = propagate_batch_full_history(debris_states, step_s, n_steps, mjd0=mjd0)
         if remainder_s > 1e-9:
@@ -183,7 +144,6 @@ class ConjunctionDetector:
             all_debs = np.concatenate((all_debs, np.array([deb_tail], dtype=np.float64)), axis=0)
             sample_times.append(lookahead_s)
 
-        # 3. TCA covariance: empirical 1-sigma grows with TLE age
         sigma_pos = 0.3 * math.sqrt(max(tle_age_days, 0.1))
 
         warnings = []
@@ -203,29 +163,22 @@ class ConjunctionDetector:
                         tca_coarse = sample_t
                         rel_v_at_tca = [s[3]-d[3], s[4]-d[4], s[5]-d[5]]
 
-                # Quick cull — only refine if under ADVISORY threshold
                 if min_dist >= ADVISORY_DISTANCE:
                     continue
 
-                # 4. Brent refinement within ±1 step of coarse TCA
                 s0 = tuple(sat_states[sat_idx])
                 d0 = tuple(debris_states[deb_idx])
                 t_lo = max(0.0, tca_coarse - step_s)
                 t_hi = min(lookahead_s, tca_coarse + step_s)
 
                 def dist_at_t(t: float) -> float:
-                    # Optimize: Start from nearest pre-propagated step in the history
                     n_nearest = int(t / step_s)
                     t_rem = t - n_nearest * step_s
-                    
                     curr_s = tuple(all_sats[n_nearest][sat_idx])
                     curr_d = tuple(all_debs[n_nearest][deb_idx])
-                    
                     if t_rem > 1e-9:
-                        # Only propagate the remaining small delta
                         curr_s = rk4_step(curr_s, t_rem, mjd0=mjd0, current_step=n_nearest)
                         curr_d = rk4_step(curr_d, t_rem, mjd0=mjd0, current_step=n_nearest)
-                        
                     dx = curr_s[0]-curr_d[0]; dy = curr_s[1]-curr_d[1]; dz = curr_s[2]-curr_d[2]
                     return math.sqrt(dx*dx + dy*dy + dz*dz)
 
@@ -235,14 +188,12 @@ class ConjunctionDetector:
                 final_dist = min(min_dist, dist_refined)
                 final_tca  = tca_refined if dist_refined < min_dist else tca_coarse
 
-                # 5. Classify severity
                 if   final_dist < CRITICAL_DISTANCE:  severity = "CRITICAL"
                 elif final_dist < WARNING_DISTANCE:   severity = "WARNING"
                 elif final_dist < ADVISORY_DISTANCE:  severity = "ADVISORY"
                 else:
                     continue
 
-                # Relative velocity at TCA
                 rel_speed = math.sqrt(sum(v*v for v in rel_v_at_tca))
                 pc = _chan_pc(final_dist, sigma_pos, rel_speed)
 

@@ -1,34 +1,19 @@
-"""Core physics and analysis helpers.
-
-The accelerator module probes native backends at import time, so keep exports
-lazy to avoid loading C++/CUDA when callers only need lightweight symbols.
-"""
-
 from __future__ import annotations
-
 from importlib import import_module
 
 __all__ = [
-    "rk4_step",
-    "rk4_batch",
-    "propagate_batch_numpy",
-    "ConjunctionDetector",
-    "ConjunctionWarning",
-    "ManeuverCalculator",
-    "ManeuverPlan",
+    "rk4_step", "rk4_batch",
+    "ConjunctionDetector", "ConjunctionWarning",
+    "ManeuverCalculator", "ManeuverPlan",
     "FuelTracker",
-    "propagate",
-    "propagate_batch",
-    "detect_conjunctions",
-    "backend_info",
-    "sun_position_eci",
-    "moon_position_eci",
+    "propagate", "propagate_batch",
+    "detect_conjunctions", "backend_info",
+    "sun_position_eci", "moon_position_eci",
 ]
 
 _LAZY_EXPORTS = {
     "rk4_step": (".propagator", "rk4_step"),
     "rk4_batch": (".propagator", "rk4_batch"),
-    "propagate_batch_numpy": (".propagator", "propagate_batch_numpy"),
     "ConjunctionDetector": (".conjunction", "ConjunctionDetector"),
     "ConjunctionWarning": (".conjunction", "ConjunctionWarning"),
     "ManeuverCalculator": (".maneuver", "ManeuverCalculator"),
