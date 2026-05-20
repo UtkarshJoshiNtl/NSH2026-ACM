@@ -189,7 +189,7 @@ python main.py run --steps 86400 --dt 10
 python main.py passes --id 44713 --lat 51.5 --lon -0.1
 
 # Batch conjunction screening
-python main.py conjunction --catalog data/tle.txt --output risks.csv
+python main.py conjunction --catalog tles.txt --output risks.csv
 ```
 
 ---

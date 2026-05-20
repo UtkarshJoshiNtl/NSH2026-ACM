@@ -1,1 +1,0 @@
-"""Astrosis REST API package."""

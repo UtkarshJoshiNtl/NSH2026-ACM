@@ -5,15 +5,13 @@
 Astrosis uses a **modular, multi-backend architecture** that automatically selects the fastest available hardware for your workload.
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    User-Facing Interfaces                   │
-├──────────────────┬──────────────────┬──────────────────────┤
-│   CLI Tools      │   Python API     │   REST API (FastAPI) │
-│   (main.py)      │   (engine.*)     │   (api/main.py)      │
-└──────────┬───────┴────────┬─────────┴──────────┬───────────┘
-           │                │                    │
-           └────────────────┼────────────────────┘
-                            │
+┌─────────────────────────────────────────────┐
+│              User Interfaces                │
+├──────────────────┬──────────────────────────┤
+│   CLI Tools      │   Python API             │
+│   (main.py)      │   (engine.*)             │
+└──────────────────┴──────────────────────────┘
+                      │
                  ┌──────────▼──────────┐
                  │ Simulation Context  │
                  │ (simulation.py)     │
@@ -196,20 +194,7 @@ make -j$(nproc)
 
 ---
 
-### `api/` — REST API
 
-FastAPI-based REST interface:
-
-```
-POST   /propagate          # Propagate satellites
-POST   /conjunction        # Conjunction screening
-POST   /maneuver           # Maneuver planning
-GET    /tle/<norad_id>     # Fetch TLE
-GET    /passes             # Ground passes
-GET    /catalog            # List available satellites
-```
-
----
 
 ### `frontend/` — Visualization
 
