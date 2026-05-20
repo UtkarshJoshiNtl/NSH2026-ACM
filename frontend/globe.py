@@ -83,7 +83,7 @@ def _land_region(lat, lon):
     return None
 
 
-def _biome_color(region, lat):
+def _biome_color(region, lat, lon):
     """Return (r, g, b) land biome colour."""
     lat_abs = abs(lat)
     if region == "arctic":
@@ -149,7 +149,7 @@ def create_earth_texture(width=2048, height=1024):
             # ---- Land ----
             region = _land_region(lat, lon)
             if region is not None:
-                lr, lg, lb = _biome_color(region, lat)
+                lr, lg, lb = _biome_color(region, lat, lon)
                 # Polar ice override on land
                 if lat_abs > 68:
                     blend = min(1.0, (lat_abs - 68) / 10.0)
