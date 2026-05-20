@@ -2,9 +2,8 @@ from dataclasses import dataclass
 from typing import List
 import numpy as np
 
-from .fuel import FuelTracker
 from .conjunction import ConjunctionWarning
-from ..constants import MAX_DV, COOLDOWN_S
+from ..constants import MAX_DV, COOLDOWN_S, ISP, G0_KM
 
 __all__ = ["ManeuverPlan", "ManeuverCalculator"]
 
@@ -17,31 +16,37 @@ class ManeuverPlan:
     burn_timing_offset_s: float
 
 
-class ManeuverCalculator:
-    def _create_plan(self, sat_state: List[float], dv_eci: np.ndarray) -> ManeuverPlan:
-        evasion_dv = list(dv_eci)
-        recovery_dv = list(-dv_eci)
-        tracker = FuelTracker()
-        cost_evasion = tracker.calculate_fuel_cost(evasion_dv)
-        tracker.apply_burn(evasion_dv)
-        cost_recovery = tracker.calculate_fuel_cost(recovery_dv)
-        return ManeuverPlan(
-            evasion_dv_eci=evasion_dv,
-            recovery_dv_eci=recovery_dv,
-            fuel_cost_kg=cost_evasion + cost_recovery,
-            burn_timing_offset_s=COOLDOWN_S,
-        )
+def _fuel_cost(dv_mag: float, initial_fuel: float = 1000.0) -> float:
+    return initial_fuel * (1.0 - np.exp(-dv_mag / (ISP * G0_KM)))
 
+
+class ManeuverCalculator:
     def calculate(
         self, sat_state: List[float], warning: ConjunctionWarning
     ) -> ManeuverPlan:
         r = np.array(sat_state[:3])
-        v = np.array(sat_state[3:])
         rv = np.array(warning.relative_velocity)
         rv_mag = np.linalg.norm(rv)
+
         if rv_mag < 1e-9:
-            r_hat = r / np.linalg.norm(r)
-            return self._create_plan(sat_state, r_hat * MAX_DV)
-        h = np.cross(r, v)
-        h_hat = h / np.linalg.norm(h)
-        return self._create_plan(sat_state, h_hat * MAX_DV)
+            direction = r / np.linalg.norm(r)
+        else:
+            direction = np.cross(rv, r)
+            d_mag = np.linalg.norm(direction)
+            if d_mag < 1e-9:
+                direction = r
+            else:
+                direction /= d_mag
+
+        evasion_mag = min(MAX_DV, warning.current_distance / warning.time_to_closest_approach * 0.5)
+        evasion_dv = list(direction * evasion_mag)
+        recovery_dv = list(-direction * evasion_mag)
+
+        fuel_cost = _fuel_cost(evasion_mag) + _fuel_cost(evasion_mag)
+
+        return ManeuverPlan(
+            evasion_dv_eci=evasion_dv,
+            recovery_dv_eci=recovery_dv,
+            fuel_cost_kg=fuel_cost,
+            burn_timing_offset_s=max(0.0, warning.time_to_closest_approach - COOLDOWN_S),
+        )

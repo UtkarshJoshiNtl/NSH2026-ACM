@@ -1,9 +1,3 @@
-"""
-astrosis/simulation.py — Local Ephemeral Simulation Context
-===========================================================
-Defines the local state objects for running single instances of the analysis engine.
-"""
-
 from dataclasses import dataclass
 from typing import Dict, List
 from .constants import INITIAL_FUEL, DRY_MASS
@@ -11,33 +5,18 @@ from .constants import INITIAL_FUEL, DRY_MASS
 @dataclass
 class ObjectState:
     id: str
-    obj_type: str  # 'SATELLITE' or 'DEBRIS'
-    r: List[float]  # [x, y, z] in km (ECI)
-    v: List[float]  # [vx, vy, vz] in km/s (ECI)
+    obj_type: str
+    r: List[float]
+    v: List[float]
     m_fuel: float = INITIAL_FUEL
     dry_mass: float = DRY_MASS
     status: str = "NOMINAL"
 
-@dataclass
-class ScheduledBurn:
-    burn_id: str
-    satellite_id: str
-    burn_type: str
-    burn_time: float
-    delta_v: List[float]
-    executed: bool = False
-
 
 class SimulationContext:
-    """
-    In-memory store for a single simulation run.
-    """
     def __init__(self, start_time: float = 0.0):
         self.objects: Dict[str, ObjectState] = {}
         self.simulation_time: float = start_time
-        self.scheduled_maneuvers: List[ScheduledBurn] = []
-        self.active_cdms: List[dict] = []
-        self.maneuver_history: List[dict] = []
 
     def get_all_satellites(self) -> List[ObjectState]:
         return [o for o in self.objects.values() if o.obj_type == "SATELLITE"]

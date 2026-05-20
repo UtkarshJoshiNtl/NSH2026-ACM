@@ -5,8 +5,6 @@ import numpy as np
 
 from ..constants import DRY_MASS, INITIAL_FUEL
 from .propagator import rk4_step, propagate_batch_numpy
-from .fuel import FuelTracker as PyFuelTracker
-from .maneuver import ManeuverCalculator as PyManeuverCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -115,10 +113,13 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
 
     if _HAS_CUDA:
         try:
-            if with_drag:
-                res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd, cr, mjd0)
-            else:
-                res = _physics.cuda_propagate_batch(arr, dt_seconds, steps, mjd0)
+            try:
+                res = _physics.cuda_propagate_batch_soa(arr, dt_seconds, steps, area, mass, cd, cr, with_drag, mjd0)
+            except (AttributeError, Exception):
+                if with_drag:
+                    res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd, cr, mjd0)
+                else:
+                    res = _physics.cuda_propagate_batch(arr, dt_seconds, steps, mjd0)
             return res.tolist()
         except Exception:
             logger.warning("CUDA propagate_batch failed, falling back")
@@ -193,31 +194,4 @@ def detect_conjunctions(sat_states: list, debris_states: list,
                             lookahead_s=lookahead, step_s=step_s, mjd0=mjd0)
 
 
-def compute_fuel_used(delta_v: list, fuel_kg: float = INITIAL_FUEL) -> float:
-    if _HAS_CPP:
-        try:
-            return _physics.FuelTracker(fuel_kg, DRY_MASS).calculate_fuel_cost(delta_v)
-        except Exception:
-            logger.warning("C++ compute_fuel_used failed, falling back")
-    return PyFuelTracker(fuel_kg).calculate_fuel_cost(delta_v)
 
-
-def calculate_maneuver(sat_state: list, warning) -> dict:
-    if _HAS_CPP:
-        try:
-            p = _physics.ManeuverCalculator().calculate(sat_state, warning)
-            return {
-                "evasion_dv":   list(p.evasion_dv_eci),
-                "recovery_dv":  list(p.recovery_dv_eci),
-                "fuel_cost_kg": p.fuel_cost_kg,
-                "burn_timing_offset_s": p.burn_timing_offset_s,
-            }
-        except Exception:
-            logger.warning("C++ calculate_maneuver failed, falling back")
-    p = PyManeuverCalculator().calculate(sat_state, warning)
-    return {
-        "evasion_dv":   p.evasion_dv_eci,
-        "recovery_dv":  p.recovery_dv_eci,
-        "fuel_cost_kg": p.fuel_cost_kg,
-        "burn_timing_offset_s": p.burn_timing_offset_s,
-    }
