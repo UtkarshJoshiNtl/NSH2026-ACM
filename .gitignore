@@ -9,3 +9,8 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# IDE / tool cache
+.cache/
+.codex/
+.agents/

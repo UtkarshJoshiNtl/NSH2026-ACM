@@ -1,11 +1,4 @@
-"""
-astrosis/physics/propagator.py — Pure Python & NumPy Orbital Propagator
-========================================================================
-Numerical integration using RK4 with:
-  - J2 + J3 + J4 gravity harmonics (EGM96)
-  - US Standard Atmosphere 1976 drag with Earth-rotation velocity correction
-  - Vectorized NumPy batch propagation for high-throughput scenarios
-"""
+"""RK4 propagator with J2/J3/J4, drag, SRP, and lunisolar perturbations."""
 
 import math
 import numpy as np
@@ -47,11 +40,8 @@ def _calculate_gravity_acceleration(x, y, z, r_mag, r2, r3, r5, r7):
     return ax, ay, az
 
 
-# ---------------------------------------------------------------------------
-# US Standard Atmosphere 1976 — piecewise exponential density table (kg/m³)
-# Each tuple: (alt_base_km, scale_height_km, rho_base)
-# Source: Vallado "Fundamentals of Astrodynamics", Table 8-4
-# ---------------------------------------------------------------------------
+# US Standard Atmosphere 1976 density table (kg/m³)
+# (alt_base_km, scale_height_km, rho_base) from Vallado Table 8-4
 _ATMO_TABLE = [
     (0,    8.44,  1.225e+0), (25,   6.49,  3.899e-2), (30,   6.75,  1.774e-2),
     (40,   7.58,  3.972e-3), (50,   8.55,  1.057e-3), (60,   7.71,  3.206e-4),
@@ -93,17 +83,10 @@ def get_atmospheric_density(altitude_km):
     return rho
 
 
-# ---------------------------------------------------------------------------
 # Scalar RK4 (single satellite)
-# ---------------------------------------------------------------------------
 
 def _calculate_third_body_acceleration(r, r_body, mu_body):
-    """
-    Calculate third-body gravitational acceleration.
-    r: satellite position (x, y, z)
-    r_body: third body position (x, y, z)
-    mu_body: third body gravitational parameter
-    """
+    """Third-body gravitational acceleration."""
     dx = r_body[0] - r[0]
     dy = r_body[1] - r[1]
     dz = r_body[2] - r[2]
@@ -119,9 +102,7 @@ def _calculate_third_body_acceleration(r, r_body, mu_body):
     return ax, ay, az
 
 def _calculate_srp_acceleration(r, r_sun, area, mass, cr):
-    """
-    Calculate Solar Radiation Pressure (SRP) acceleration with cylindrical shadow.
-    """
+    """SRP acceleration with cylindrical shadow model."""
     if area <= 0 or mass <= 0:
         return 0.0, 0.0, 0.0
 
@@ -146,15 +127,14 @@ def _calculate_srp_acceleration(r, r_sun, area, mass, cr):
 
     # SRP Acceleration
     # a_srp = - P_SR * Cr * (A/m) * shadow * (1 AU / rs_mag)^2 * (r_sun / rs_mag)
-    # P_SR is N/m^2, A/m is m^2/kg, result is N/kg = m/s^2. Multiply by 1e-3 for km/s^2.
+    # P_SR (N/m²) × A/m (m²/kg) → m/s², × 1e-3 → km/s²
     
-    # Note: treating Sun as infinitely far for the vector direction is common,
-    # but using exact vector from satellite is better.
+        # Use exact vector from satellite rather than treating Sun as infinitely far
     dx = r[0] - r_sun[0]
     dy = r[1] - r_sun[1]
     dz = r[2] - r_sun[2]
 
-    # Approximate AU scale factor (usually close to 1)
+    # AU scaling factor
     au_scale = (AU / rs_mag)**2
     
     coeff = P_SR * cr * (area / mass) * shadow * au_scale * 1e-3
@@ -164,12 +144,7 @@ def _calculate_srp_acceleration(r, r_sun, area, mass, cr):
 
 def rk4_step(state: tuple, dt: float, mjd0: float = 0.0, current_step: int = 0,
              area: float = 0.0, mass: float = 1.0, cd: float = 2.2, cr: float = 1.5) -> tuple:
-    """
-    Consolidated RK4 integrator with J2+J3+J4 gravity (+ optional drag, SRP, Lunisolar).
-    Operates on a single 6-element state vector (x,y,z,vx,vy,vz) [km, km/s].
-    If area > 0 and mass > 0, drag and SRP are included.
-    If mjd0 > 0, Lunisolar and SRP are enabled.
-    """
+    """Single-step RK4 with gravity, drag, SRP, and lunisolar perturbations."""
 
     def acceleration(r, v, local_mjd):
         x, y, z = r[0], r[1], r[2]
@@ -197,7 +172,7 @@ def rk4_step(state: tuple, dt: float, mjd0: float = 0.0, current_step: int = 0,
                     ay += drag_coeff * vr_y
                     az += drag_coeff * vr_z
 
-        # Time-dependent perturbations (Sun and Moon)
+        # Sun and Moon perturbations
         if mjd0 > 0.0:
             r_sun = sun_position_eci(local_mjd)
             r_moon = moon_position_eci(local_mjd)
@@ -248,9 +223,7 @@ def rk4_step(state: tuple, dt: float, mjd0: float = 0.0, current_step: int = 0,
     return res
 
 
-# ---------------------------------------------------------------------------
-# Vectorized NumPy Batch Propagator (N satellites in parallel)
-# ---------------------------------------------------------------------------
+# Vectorized NumPy batch propagator
 
 def _accel_batch(R: np.ndarray, V: np.ndarray,
                  area: float = 0.0, mass: float = 1.0, cd: float = 2.2, cr: float = 1.5,
@@ -285,7 +258,7 @@ def _accel_batch(R: np.ndarray, V: np.ndarray,
     ay += J4F * Y * (3.0 - 42.0 * Z2_R2 + 63.0 * Z4_R4)
     az += J4F * Z * (15.0 - 70.0 * Z2_R2 + 63.0 * Z4_R4)
 
-    # Vectorized Drag
+    # Drag
     if with_drag and mass > 0:
         alt = R_mag - RE
         rho = get_atmospheric_density(alt)

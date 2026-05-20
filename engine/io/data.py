@@ -1,10 +1,5 @@
-"""
-astrosis/data.py — TLE Data Ingestion from Celestrak
-==========================================================
-Service for fetching and caching TLE (Two-Line Element) data locally.
-"""
+"""Fetch and cache TLE data from Celestrak."""
 
-import httpx
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 import logging
@@ -15,19 +10,17 @@ import pathlib
 
 logger = logging.getLogger("Astrosis-TLE")
 
-# XDG-style cache: ~/.cache/astrosis/tle/
-# This path is stable whether the engine is run from source, installed via pip,
-# or used inside a virtualenv — unlike package-relative paths which break on install.
+# Cache dir: ~/.cache/astrosis/tle/
 LOCAL_CACHE_DIR = str(pathlib.Path.home() / ".cache" / "astrosis" / "tle")
 CELESTRAK_API_URL = "https://celestrak.org/NORAD/elements/gp.php"
 
-# TLE epoch year cutoff: years < 57 are 2000+, years >= 57 are 1900+
+# Standard TLE convention: years < 57 are 2000+, >= 57 are 1900+
 # This is a standard TLE convention for two-digit years
 EPOCH_YEAR_CUTOFF = 57
 
 
 class TLEIngestor:
-    """Service for ingesting TLE data from Celestrak and caching locally."""
+    """Fetch and cache TLE data from Celestrak."""
 
     def __init__(self, cache_dir: str = LOCAL_CACHE_DIR):
         self.api_url = CELESTRAK_API_URL
@@ -47,9 +40,8 @@ class TLEIngestor:
         return age <= timedelta(hours=max_age_hours)
 
     def fetch_tle_data(self, satellite_id: Optional[str] = None, force_refresh: bool = False) -> List[str]:
-        """
-        Fetch TLE data from Celestrak synchronously.
-        """
+        """Fetch TLE from Celestrak (with local cache)."""
+        import httpx
         cache_path = self._get_cache_path(satellite_id)
         if not force_refresh and self._is_cache_valid(cache_path):
             logger.info(f"Loaded TLEs from local cache: {cache_path}")
@@ -84,10 +76,7 @@ class TLEIngestor:
 
     @staticmethod
     def _tle_checksum_valid(line: str) -> bool:
-        """
-        Validate the TLE line checksum (last character of each TLE data line).
-        The checksum is the modulo-10 sum of all digits in the line (dashes count as 1).
-        """
+    """Validate TLE checksum (mod-10 sum of digits, dashes count as 1)."""
         if len(line) < 69:
             return False
         checksum = 0
@@ -108,13 +97,13 @@ class TLEIngestor:
                 line1 = lines[i + 1].strip()
                 line2 = lines[i + 2].strip()
 
-                # --- Validate checksums before accepting the record ---
+                # Validate checksums
                 if not (self._tle_checksum_valid(line1) and self._tle_checksum_valid(line2)):
                     logger.warning(f"Skipping TLE '{name}': invalid checksum on one or both element lines.")
                     i += 3
                     continue
 
-                # --- Validate line identifiers ---
+                # Validate line identifiers
                 if not (line1.startswith('1 ') and line2.startswith('2 ')):
                     logger.warning(f"Skipping TLE block at index {i}: lines do not begin with '1 '/'2 '.")
                     i += 1
@@ -152,7 +141,7 @@ class TLEIngestor:
         return tle_entries
 
     def get_satellites(self, satellite_id: Optional[str] = None, force_refresh: bool = False) -> List[dict]:
-        """High-level function to get parsed satellite TLEs."""
+        """Fetch and parse satellite TLEs."""
         lines = self.fetch_tle_data(satellite_id, force_refresh)
         return self.parse_tle_lines(lines)
 

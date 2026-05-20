@@ -478,24 +478,6 @@ PYBIND11_MODULE(physics_engine, m) {
         return states; // Return the same array since it was modified in-place
     }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
 
-    m.def("cuda_propagate_batch_soa", [](py::array_t<double> states, double dt, int steps, double area, double mass, double cd, double cr, bool with_drag, double mjd0) {
-        auto buf = states.request();
-        if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
-        int n = (int)buf.shape[0];
-        double* ptr = (double*)buf.ptr;
-        { py::gil_scoped_release release; cuda_propagate_batch_soa(ptr, n, dt, steps, area, mass, cd, cr, with_drag, mjd0); }
-        return states;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("area") = 0.0, py::arg("mass") = 1.0, py::arg("cd") = 2.2, py::arg("cr") = 1.5, py::arg("with_drag") = false, py::arg("mjd0") = 0.0);
-
-    m.def("cuda_propagate_batch_streamed", [](py::array_t<double> states, double dt, int steps, double mjd0) {
-        auto buf = states.request();
-        if (buf.ndim != 2 || buf.shape[1] != 6) throw std::runtime_error("States must be (N, 6)");
-        int n = (int)buf.shape[0];
-        double* ptr = (double*)buf.ptr;
-        { py::gil_scoped_release release; cuda_propagate_batch_streamed(ptr, n, dt, steps, mjd0); }
-        return states;
-    }, py::arg("states"), py::arg("dt_seconds"), py::arg("steps"), py::arg("mjd0") = 0.0);
-
     m.def("cuda_propagate_batch_drag", [](py::array_t<double> states, double dt, int steps, 
                                           double area, double mass, double cd, double cr, double mjd0) {
         auto buf = states.request();

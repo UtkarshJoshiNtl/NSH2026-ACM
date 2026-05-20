@@ -1,17 +1,4 @@
-"""
-validation/scaling_analysis.py — HPC Scaling & CUDA Crossover Analysis
-========================================================================
-Three scaling experiments:
-
-1. Strong scaling:  N=10,000 sats, vary OMP_NUM_THREADS 1→16, plot speedup
-2. Weak scaling:    N proportional to threads, plot parallel efficiency η
-3. CUDA crossover:  N from 10 to 10,000, find where GPU beats CPU
-
-Run:
-    python validation/scaling_analysis.py
-
-All plots saved to validation/plots/.
-"""
+"""Scaling experiments: strong scaling, weak scaling, CUDA crossover point."""
 
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -39,17 +26,20 @@ plt.rcParams.update(STYLE)
 ACCENT = "#58a6ff"; GREEN = "#3fb950"; ORANGE = "#d29922"; RED = "#f85149"
 
 # ── Load backends ─────────────────────────────────────────────────────────────
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cpp", "build"))
 try:
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cpp", "build"))
     import physics_engine as _cpp
-    HAS_CPP  = True
-    HAS_CUDA = getattr(_cpp, "cuda_available", lambda: False)()
-    HAS_BATCH = hasattr(_cpp.Propagator, "batch_propagate_steps")
 except ImportError:
-    _cpp = None; HAS_CPP = False; HAS_CUDA = False; HAS_BATCH = False
+    _cpp = None
 
+from engine.core.accelerator import backend_info
 from engine.core.propagator import propagate_batch_numpy
 from engine.constants import RE
+
+_bi = backend_info()
+HAS_CPP  = _bi["cpp"]
+HAS_CUDA = _bi["cuda"]
+HAS_BATCH = HAS_CPP
 
 DT    = 10.0   # step size [s]
 STEPS = 100    # integration steps per measurement
@@ -124,13 +114,6 @@ def _time_cuda(states: np.ndarray) -> float:
     arr = states.copy()
     t0 = time.perf_counter()
     _cpp.cuda_propagate_batch(arr, DT, STEPS)
-    return time.perf_counter() - t0
-
-
-def _time_cuda_soa(states: np.ndarray) -> float:
-    arr = states.copy()
-    t0 = time.perf_counter()
-    _cpp.cuda_propagate_batch_soa(arr, DT, STEPS)
     return time.perf_counter() - t0
 
 
@@ -215,7 +198,7 @@ def cuda_crossover():
         print("  SKIP — C++ not available"); return
 
     Ns = [10, 50, 100, 250, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000]
-    cpp_times, cuda_aos_times, cuda_soa_times = [], [], []
+    cpp_times, cuda_aos_times = [], []
     crossover_N = None
 
     for N in Ns:
@@ -226,17 +209,11 @@ def cuda_crossover():
         cuda_t = _time_cuda(states) * 1000 if HAS_CUDA else None
         cuda_aos_times.append(cuda_t)
 
-        soa_t = None
-        if HAS_CUDA and hasattr(_cpp, "cuda_propagate_batch_soa"):
-            soa_t = _time_cuda_soa(states) * 1000
-        cuda_soa_times.append(soa_t)
-
         if HAS_CUDA and cuda_t is not None and crossover_N is None and cuda_t < cpp_t * 1000:
             crossover_N = N
 
         print(f"  N={N:6,}  C++={cpp_times[-1]:7.1f}ms"
-              + (f"  CUDA-AoS={cuda_t:7.1f}ms" if cuda_t else "")
-              + (f"  CUDA-SoA={soa_t:7.1f}ms" if soa_t else ""))
+              + (f"  CUDA={cuda_t:7.1f}ms" if cuda_t else ""))
 
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(Ns, cpp_times, "o-", color=ACCENT, label="C++ (OpenMP)")
@@ -244,16 +221,12 @@ def cuda_crossover():
         valid = [(n, t) for n, t in zip(Ns, cuda_aos_times) if t is not None]
         ax.plot([v[0] for v in valid], [v[1] for v in valid], "s-",
                 color=GREEN, label="CUDA AoS")
-    if any(t is not None for t in cuda_soa_times):
-        valid = [(n, t) for n, t in zip(Ns, cuda_soa_times) if t is not None]
-        ax.plot([v[0] for v in valid], [v[1] for v in valid], "^-",
-                color=ORANGE, label="CUDA SoA (coalesced)")
     if crossover_N:
         ax.axvline(crossover_N, color=RED, ls=":", lw=1.5,
                    label=f"CUDA breakeven ≈ N={crossover_N}")
     ax.set_xlabel("Number of satellites (N)")
     ax.set_ylabel("Propagation time (ms)")
-    ax.set_title(f"CUDA vs C++ Crossover + AoS vs SoA  ({STEPS} steps × {DT}s)")
+    ax.set_title(f"CUDA vs C++ Crossover  ({STEPS} steps × {DT}s)")
     ax.legend(); ax.grid(True)
     ax.set_xscale("log")
     ax.set_yscale("log")

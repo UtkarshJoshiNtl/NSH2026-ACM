@@ -1,59 +1,44 @@
-"""
-benchmark.py — Three-Way Performance Benchmark: Python vs C++ vs CUDA
-======================================================================
-Compares every available backend across multiple workload sizes:
-  - Single-satellite propagation (scalability baseline)
-  - Batch propagation: N satellites × steps
-  - Conjunction detection: N sats × N debris
-  - Fuel calculation
-  - Maneuver planning
-
-Run with:
-    python benchmark.py           # auto-selects available backends
-    python benchmark.py --quick   # smaller workloads for fast iteration
-"""
+"""Benchmark Python vs C++ vs CUDA across workload sizes."""
 
 import argparse
 import time
 import sys
 import os
 import logging
-import tracemalloc
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Tuple
 
 logging.basicConfig(level=logging.WARNING)
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'cpp', 'build')))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# ── Import backends directly so we can force each one ────────────────────────
 from engine.core.propagator import rk4_step, rk4_batch, propagate_batch_numpy
 from engine.core.conjunction import ConjunctionDetector as PyDetector
-from engine.core.conjunction import ConjunctionWarning
+from engine.core.accelerator import backend_info
 from engine.constants import MU, RE
 import numpy as np
 
-# Try loading C++ / CUDA module
+# Backend info
+_info = backend_info()
+_HAS_CPP = _info["cpp"]
+_HAS_CUDA = _info["cuda"]
+_HAS_BATCH = _info["cpp"]
+
+# Import C++ module directly for benchmarking individual tiers
 try:
     import physics_engine as _cpp
-    _HAS_CPP = True
-    _HAS_CUDA = getattr(_cpp, 'cuda_available', lambda: False)()
-    _HAS_BATCH = hasattr(_cpp.Propagator, 'batch_propagate_steps')
 except ImportError:
     _cpp = None
-    _HAS_CPP = False
-    _HAS_CUDA = False
-    _HAS_BATCH = False
 
 # ── Test data ─────────────────────────────────────────────────────────────────
-ISS_STATE = [-6371.0 + 400.0, 0.0, 0.0, 0.0, 7.66, 0.0]
+ISS_STATE = [-RE + 400.0, 0.0, 0.0, 0.0, 7.66, 0.0]
+
 
 def gen_states(n: int) -> Tuple[list, list]:
     sats, debs = [], []
     for i in range(n):
-        sats.append([-6371+400+i*0.1, i*0.5, 0.0, 0.0, 7.66+i*0.001, 0.0])
-        debs.append([-6371+405+i*0.1, i*0.5+1.0, 0.5, 0.1, 7.65+i*0.001, 0.1])
+        sats.append([-RE+400+i*0.1, i*0.5, 0.0, 0.0, 7.66+i*0.001, 0.0])
+        debs.append([-RE+405+i*0.1, i*0.5+1.0, 0.5, 0.1, 7.65+i*0.001, 0.1])
     return sats, debs
 
 
@@ -85,7 +70,6 @@ class BenchResult:
 
 
 def _t(fn) -> float:
-    """Time a callable, return seconds."""
     start = time.perf_counter()
     fn()
     return time.perf_counter() - start
@@ -96,19 +80,16 @@ def _t(fn) -> float:
 def bench_single_propagation(iters: int) -> BenchResult:
     r = BenchResult(f"Single propagation ({iters:,} iters)")
 
-    # Python
     def py():
         s = tuple(ISS_STATE)
         for _ in range(iters): s = rk4_step(s, 10.0)
     r.py_s = _t(py)
 
-    # NumPy (batch of 1)
     arr = np.array([ISS_STATE])
     def np_fn():
         rk4_batch(arr, 10.0, iters)
     r.np_s = _t(np_fn)
 
-    # C++
     if _HAS_CPP:
         prop = _cpp.Propagator()
         def cpp():
@@ -124,19 +105,16 @@ def bench_batch_propagation(n: int, steps: int) -> BenchResult:
     sats, _ = gen_states(n)
     dt = 10.0
 
-    # Python loop
     def py():
         ss = [tuple(s) for s in sats]
         for _ in range(steps):
             ss = [rk4_step(s, dt) for s in ss]
     r.py_s = _t(py)
 
-    # NumPy vectorized
     def np_fn():
         propagate_batch_numpy(sats, dt, steps)
     r.np_s = _t(np_fn)
 
-    # C++ batch (GIL-released)
     if _HAS_BATCH:
         prop = _cpp.Propagator()
         def cpp():
@@ -144,26 +122,14 @@ def bench_batch_propagation(n: int, steps: int) -> BenchResult:
             prop.batch_propagate_steps(arr, dt, steps)
         r.cpp_s = _t(cpp)
 
-    # CUDA
     if _HAS_CUDA:
         arr_cuda = np.array(sats, dtype=np.float64)
-        
-        # 1. AoS
-        def cuda_aos():
-            _cpp.cuda_propagate_batch(arr_cuda, dt, steps)
-        r.cuda_s = _t(cuda_aos)
-        
-        # 2. SoA (for note)
-        def cuda_soa():
-            _cpp.cuda_propagate_batch_soa(arr_cuda, dt, steps)
-        t_soa = _t(cuda_soa)
-        
-        # 3. Streamed
-        def cuda_stream():
-            _cpp.cuda_propagate_batch_streamed(arr_cuda, dt, steps)
-        t_stream = _t(cuda_stream)
-        
-        r.note = f"AoS: {r.cuda_s*1000:.1f}ms | SoA: {t_soa*1000:.1f}ms | Stream: {t_stream*1000:.1f}ms"
+
+        def cuda_bench():
+            fn = getattr(_cpp, "cuda_propagate_batch_soa", _cpp.cuda_propagate_batch)
+            fn(arr_cuda, dt, steps)
+        r.cuda_s = _t(cuda_bench)
+
     return r
 
 
@@ -171,21 +137,17 @@ def bench_conjunction(n: int, lookahead: float = 3600.0, step: float = 60.0) -> 
     r = BenchResult(f"Conjunction detection ({n}×{n} pairs, {int(lookahead/3600)}h)")
     sats, debs = gen_states(n)
 
-    # Python
     def py():
         PyDetector().detect(sats, debs, lookahead_s=lookahead, step_s=step)
     r.py_s = _t(py)
 
-    # C++ (no NumPy path for conjunction)
     r.np_s = None
 
-    # C++
     if _HAS_CPP:
         def cpp():
             _cpp.ConjunctionDetector().detect(sats, debs, lookahead, step)
         r.cpp_s = _t(cpp)
 
-    # CUDA
     if _HAS_CUDA and hasattr(_cpp, 'cuda_detect_conjunctions'):
         def cuda():
             _cpp.cuda_detect_conjunctions(sats, debs, lookahead, step)
@@ -198,16 +160,10 @@ def bench_conjunction(n: int, lookahead: float = 3600.0, step: float = 60.0) -> 
 
 def print_header():
     sep = "─" * 110
-    print(f"\n{'Astrosis Three-Way Performance Benchmark':^110}")
+    print(f"\n{'Astrosis Performance Benchmark':^110}")
     print(sep)
-    backends = []
-    backends.append("Python ✓")
-    backends.append("NumPy ✓")
-    backends.append(f"C++ {'✓' if _HAS_CPP else '✗'}")
-    backends.append(f"CUDA {'✓' if _HAS_CUDA else '✗ (no nvcc)'}")
-    print(f"  Backends: {' │ '.join(backends)}")
-    if _HAS_CUDA:
-        _cpp.cuda_print_device_info()
+    print(f"  Backends: Python ✓ │ NumPy ✓ │ C++ {'✓' if _HAS_CPP else '✗'} │ "
+          f"CUDA {'✓' if _HAS_CUDA else '✗'}")
     print(sep)
     print(f"  {'Benchmark':<38} │ {'Python':>12} │ {'NumPy':>12} │ "
           f"{'C++ (speedup)':>22} │ {'CUDA (speedup)':>22}")
@@ -217,7 +173,6 @@ def print_header():
 def print_footer(results: List[BenchResult]):
     sep = "─" * 110
     print(sep)
-    # Summary speedups (batch propagation is the key metric)
     batch = next((r for r in results if "Batch" in r.name), None)
     if batch:
         print(f"\n  Key metric — Batch Propagation:")
@@ -231,26 +186,23 @@ def print_footer(results: List[BenchResult]):
                 print(f"    CUDA   vs C++:    {batch.speedup(batch.cpp_s, batch.cuda_s):>8}")
 
     if not _HAS_CPP:
-        print("\n  ⚠  C++ module not built. Run: cd cpp && mkdir build && cd build && cmake .. && make")
+        print("\n  C++ module not built. Run: cd cpp && mkdir build && cd build && cmake .. && make")
     if not _HAS_CUDA:
-        print("  ⚠  CUDA not available. Install CUDA Toolkit, then: cmake .. -DUSE_CUDA=ON && make")
+        print("  CUDA not available. Install CUDA Toolkit, then: cmake .. -DUSE_CUDA=ON && make")
     print()
 
 
 def main(quick: bool = False):
-    if _HAS_CUDA:
-        # Warmup CUDA context
+    if _HAS_CUDA and _cpp is not None:
         _cpp.cuda_propagate_batch([[RE+400, 0, 0, 0, 7.6, 0]], 10.0, 1)
 
     print_header()
     results = []
 
     if quick:
-        configs = dict(single_iters=5_000, batch_n=200, batch_steps=100,
-                       conj_n=50)
+        configs = dict(single_iters=5_000, batch_n=200, batch_steps=100, conj_n=50)
     else:
-        configs = dict(single_iters=50_000, batch_n=1_000, batch_steps=864,
-                       conj_n=200)
+        configs = dict(single_iters=50_000, batch_n=1_000, batch_steps=864, conj_n=200)
 
     for fn, args in [
         (bench_single_propagation, (configs['single_iters'],)),

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "astrosis"
 version = "0.2.0"
-description = "GPU-Accelerated Orbital Propagation and Conjunction Analysis Engine"
+description = "GPU-accelerated orbital propagation and conjunction analysis"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -15,11 +15,11 @@ dependencies = [
     "pybind11>=2.10.0",
     "httpx>=0.27.0",
     "sgp4>=2.23",
+    "matplotlib>=3.8.0",
 ]
 
 [project.urls]
 Source = "https://github.com/anomalyco/astrosis"
-Documentation = "https://github.com/anomalyco/astrosis/tree/main/docs"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

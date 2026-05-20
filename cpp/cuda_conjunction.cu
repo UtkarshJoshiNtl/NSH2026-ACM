@@ -1,13 +1,7 @@
-/*
- * cpp/cuda_conjunction.cu — CUDA All-Pairs Conjunction Screening
- * ==============================================================
- */
+/* CUDA all-pairs conjunction screening. */
 #include "cuda_bridge.h"
 #include "cuda_physics.cuh"
 #include <cuda_runtime.h>
-#include <device_launch_parameters.h>
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
 #include <cmath>
 #include <vector>
 #include <stdexcept>
@@ -18,20 +12,18 @@
         throw std::runtime_error(std::string("CUDA: ")+cudaGetErrorString(_e) \
             +" at " __FILE__ ":"+std::to_string(__LINE__)); } while(0)
 
-// Thresholds
-__constant__ double C_CRIT = 0.1;   // km
-__constant__ double C_WARN = 1.0;   // km
-__constant__ double C_ADV  = 5.0;   // km
+// Thresholds (km)
+__constant__ double C_CRIT = 0.1;
+__constant__ double C_WARN = 1.0;
+__constant__ double C_ADV  = 5.0;
 
-// ── Result struct for GPU output ──────────────────────────────────────────────
 struct GpuWarning {
     int sat_id, deb_id;
     double min_dist, tca;
     double rel_vx, rel_vy, rel_vz;
-    int severity; // 0=none, 1=advisory, 2=warning, 3=critical
+    int severity;
 };
 
-// ── Temporal sweep for all pairs ────────────────────────────
 __global__ void k_narrow(
     const double* __restrict__ sats, int ns,
     const double* __restrict__ debs, int nd,
@@ -43,7 +35,6 @@ __global__ void k_narrow(
     int di = blockIdx.y * blockDim.y + threadIdx.y;
     if (si >= ns || di >= nd) return;
 
-    // Load initial states into registers
     double sx = sats[si*6], sy = sats[si*6+1], sz = sats[si*6+2];
     double svx = sats[si*6+3], svy = sats[si*6+4], svz = sats[si*6+5];
     double dx = debs[di*6], dy = debs[di*6+1], dz = debs[di*6+2];
@@ -72,13 +63,11 @@ __global__ void k_narrow(
     if (sev == 0) return;
 
     int idx = atomicAdd(out_count, 1);
-    if (idx < max_out) {
-        out[idx] = {si, di, min_dist, tca, rv_x, rv_y, rv_z, sev};
-    }
+    if (idx >= max_out) return;
+    out[idx] = {si, di, min_dist, tca, rv_x, rv_y, rv_z, sev};
 }
 
 #ifdef USE_CUDA
-// ── Host launcher ─────────────────────────────────────────────────────────────
 std::vector<ConjunctionWarning> cuda_detect_conjunctions(
         const double* sat_states, int ns,
         const double* debris_states, int nd,
@@ -94,14 +83,12 @@ std::vector<ConjunctionWarning> cuda_detect_conjunctions(
     CUDA_CHECK(cudaMalloc(&dd,    nd*6*sizeof(double)));
     CUDA_CHECK(cudaMalloc(&cnt,   sizeof(int)));
     CUDA_CHECK(cudaMalloc(&gout,  max_out*sizeof(GpuWarning)));
-    
+
     CUDA_CHECK(cudaMemcpy(ds, sat_states, ns*6*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(dd, debris_states, nd*6*sizeof(double), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemset(cnt, 0, sizeof(int)));
 
     dim3 blk(16, 16), grd((ns+15)/16, (nd+15)/16);
-
-    // Narrow phase for all pairs
     k_narrow<<<grd, blk>>>(ds, ns, dd, nd, gout, cnt, max_out, lookahead_s, step_s, mjd0);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaDeviceSynchronize());

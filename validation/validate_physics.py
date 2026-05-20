@@ -1,20 +1,4 @@
-"""
-validation/validate_physics.py — Numerical Correctness Validation Suite
-=========================================================================
-Four rigorous tests that PROVE the propagator is correct, not just claim it.
-
-Run:
-    python validation/validate_physics.py
-
-Outputs four PNG plots to validation/plots/.
-
-Tests
------
-1. Energy conservation   — 24h no-drag: Δε/ε should stay < 1e-7 per orbit
-2. SGP4 comparison       — ISS TLE: position error growth over 24h
-3. RAAN precession       — J2-driven Ω drift vs analytical formula
-4. RK4 convergence order — halving dt should reduce error by exactly 16× (4th order)
-"""
+"""Validation suite: energy conservation, SGP4 comparison, RAAN precession, RK4 convergence."""
 
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -28,18 +12,12 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
 from engine.core.propagator import rk4_step
-from engine.constants import MU, RE, J2, MU_SUN, MU_MOON
+from engine.constants import MU, RE, J2, MU_SUN, MU_MOON, ISS_LINE1, ISS_LINE2
 
-# Try to import C++ backend for parity checks
-try:
-    import physics_engine as _cpp
-    _HAS_CPP = True
-except ImportError:
-    _HAS_CPP = False
+from engine.core.accelerator import backend_info
+_HAS_CPP = backend_info()["cpp"]
 
-# ── Embedded ISS TLE (May 2025, epoch baked in so no network needed) ──────────
-ISS_LINE1 = "1 25544U 98067A   25135.54166667  .00007700  00000+0  14217-3 0  9994"
-ISS_LINE2 = "2 25544  51.6412 227.8960 0002170 183.9820 176.1230 15.49534348505800"
+# ISS TLE imported from engine.constants
 
 PLOTS_DIR = os.path.join(os.path.dirname(__file__), "plots")
 os.makedirs(PLOTS_DIR, exist_ok=True)
@@ -145,27 +123,17 @@ def test_sgp4_comparison():
     try:
         from sgp4.api import Satrec, jday
         from datetime import datetime, timedelta
-        from engine.geo.analysis import _teme_to_eci
+        from engine.geo.frames import teme_to_eci
     except ImportError:
         print("  SKIP — sgp4 not installed\n")
         return True
 
-    satrec = Satrec.twoline2rv(ISS_LINE1, ISS_LINE2)
-
-    # Epoch from the TLE
-    ep_yr  = 2025
-    ep_day = 135.54166667  # day of year
-    epoch_dt = datetime(ep_yr, 1, 1) + timedelta(days=ep_day - 1)
-
+    epoch_dt = datetime(2025, 5, 15, 13, 0, 0)
     jd, jdf = jday(epoch_dt.year, epoch_dt.month, epoch_dt.day,
-                   epoch_dt.hour, epoch_dt.minute,
-                   epoch_dt.second + epoch_dt.microsecond / 1e6)
-    err, r0_teme, v0_teme = satrec.sgp4(jd, jdf)
-    if err != 0:
-        print(f"  SGP4 error code {err} — SKIP\n")
-        return True
-
-    r0_eci, v0_eci = _teme_to_eci(np.array(r0_teme), np.array(v0_teme), epoch_dt)
+                   epoch_dt.hour, epoch_dt.minute, epoch_dt.second)
+    satrec = Satrec.twoline2rv(ISS_LINE1, ISS_LINE2)
+    _, r0_teme, v0_teme = satrec.sgp4(jd, jdf)
+    r0_eci, v0_eci = teme_to_eci(np.array(r0_teme), np.array(v0_teme), epoch_dt)
     state = list(r0_eci) + list(v0_eci)
     # TLE epoch: May 15, 2025 13:00:00 UTC (Modified Julian Date approx 60810.54)
     # We'll use a fixed MJD for this test to keep ephemeris deterministic
@@ -193,7 +161,7 @@ def test_sgp4_comparison():
                          step_dt.hour, step_dt.minute,
                          step_dt.second + step_dt.microsecond / 1e6)
         _, r_sgp4, v_sgp4 = satrec.sgp4(jd2, jdf2)
-        r_eci_ref, _ = _teme_to_eci(np.array(r_sgp4), np.array(v_sgp4), step_dt)
+        r_eci_ref, _ = teme_to_eci(np.array(r_sgp4), np.array(v_sgp4), step_dt)
         err_km = float(np.linalg.norm(np.array(curr[:3]) - r_eci_ref))
         times.append(t_s / 3600.0)
         errors.append(err_km)

@@ -138,7 +138,7 @@ __device__ __forceinline__ void accel_drag(
         
         if (dot_prod < 0) {
             double proj = dot_prod / rs_mag;
-            double d_perp2 = max(0.0, r_mag*r_mag - proj*proj);
+            double d_perp2 = fmax(0.0, r_mag*r_mag - proj*proj);
             if (sqrt(d_perp2) < C_RE) shadow = 0.0;
         }
         

@@ -1,8 +1,4 @@
-"""
-engine/cli.py — Astrosis CLI
-=============================
-Demo commands: fetch, propagate, conjunction
-"""
+"""CLI interface for demo commands: fetch, propagate, conjunction."""
 
 import argparse
 import sys
@@ -12,7 +8,7 @@ import math
 from .io.data import tle_ingestor
 from .core.propagator import rk4_step
 from .core.conjunction import ConjunctionDetector
-from .constants import MU, RE
+from .constants import MU, RE, ISS_LINE1, ISS_LINE2
 
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger("Astrosis")
@@ -25,8 +21,8 @@ def _cmd_fetch(args):
 
 
 def _cmd_propagate(args):
-    line1 = "1 25544U 98067A   25135.54166667  .00007700  00000+0  14217-3 0  9994"
-    line2 = "2 25544  51.6412 227.8960 0002170 183.9820 176.1230 15.49534348505800"
+    line1 = ISS_LINE1
+    line2 = ISS_LINE2
 
     from sgp4.api import Satrec, jday
     sat = Satrec.twoline2rv(line1, line2)

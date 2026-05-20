@@ -1,19 +1,10 @@
-"""
-engine/core/accelerator.py — Tiered Backend Bridge
-======================================================
-Priority: CUDA GPU → C++ CPU → NumPy Batch → Pure Python
-
-Public API is backend-agnostic; callers use the same function signatures
-regardless of which tier is active.
-"""
+"""Backend selector: tries CUDA, C++, then falls back to NumPy/Python."""
 
 import sys
 import os
 import logging
-from typing import List, Optional
 import numpy as np
 
-# Python fallbacks
 from .propagator import rk4_step, propagate_batch_numpy
 
 logger = logging.getLogger(__name__)
@@ -38,18 +29,10 @@ def _load_physics():
 
 _physics = _load_physics()
 
-# Detect available tiers at import time
+# Immutable after import
 _HAS_CPP  = _physics is not None
 _HAS_CUDA = _HAS_CPP and getattr(_physics, "cuda_available", lambda: False)()
 _HAS_BATCH_CPP = _HAS_CPP and hasattr(_physics.Propagator, "batch_propagate_steps")
-
-_CUDA_BATCH_ENABLED = _HAS_CUDA
-_CUDA_HISTORY_ENABLED = _HAS_CUDA
-_CUDA_CONJUNCTION_ENABLED = _HAS_CUDA and hasattr(_physics, "cuda_detect_conjunctions")
-_CPP_SINGLE_ENABLED = _HAS_CPP
-_CPP_BATCH_ENABLED = _HAS_BATCH_CPP
-_CPP_HISTORY_ENABLED = _HAS_BATCH_CPP
-_CPP_CONJUNCTION_ENABLED = _HAS_CPP
 
 if _HAS_CUDA:
     logger.info("Backend: CUDA GPU acceleration active")
@@ -63,43 +46,34 @@ def backend_info() -> dict:
     """Return a dict describing which backends are available and active."""
     active = "python"
     desc = "Pure Python RK4 / SciPy"
-    cuda_active = _CUDA_BATCH_ENABLED or _CUDA_HISTORY_ENABLED or _CUDA_CONJUNCTION_ENABLED
-    cpp_active = (
-        _CPP_SINGLE_ENABLED or _CPP_BATCH_ENABLED or _CPP_HISTORY_ENABLED
-        or _CPP_CONJUNCTION_ENABLED
-    )
-    if cuda_active:
+    if _HAS_CUDA:
         active = "cuda"
         desc = "CUDA GPU acceleration (NVIDIA)"
-    elif _CPP_BATCH_ENABLED:
+    elif _HAS_BATCH_CPP:
         active = "cpp"
         desc = "C++ multi-threaded (OpenMP)"
-    elif cpp_active:
+    elif _HAS_CPP:
         active = "cpp"
         desc = "C++ single-threaded"
 
     return {
         "active":     active,
-        "backend":    active, # alias for API compatibility
-        "cuda":       cuda_active,
-        "cpp":        cpp_active,
+        "backend":    active,
+        "cuda":       _HAS_CUDA,
+        "cpp":        _HAS_CPP,
         "numpy_batch": True,
         "python":     True,
         "description": desc,
     }
 
 
-# ── Single-step propagation ───────────────────────────────────────────────────
-
 def propagate(state: list, dt_seconds: float, mjd0: float = 0.0) -> list:
     """Propagate a single satellite one RK4 step."""
-    global _CPP_SINGLE_ENABLED
-    if _CPP_SINGLE_ENABLED:
+    if _HAS_CPP:
         try:
             return list(_physics.Propagator().propagate(state, dt_seconds, mjd0))
         except Exception as e:
-            _CPP_SINGLE_ENABLED = False
-            logger.warning(f"C++ propagate failed: {e}. Disabling C++ single propagation for this process.")
+            logger.warning(f"C++ propagate failed: {e}")
     return list(rk4_step(tuple(state), dt_seconds, mjd0))
 
 
@@ -107,14 +81,12 @@ def propagate_with_drag(state: list, dt_seconds: float,
                          area: float = 10.0, mass: float = 1000.0,
                          cd: float = 2.2, cr: float = 1.5, mjd0: float = 0.0) -> list:
     """Propagate a single satellite one RK4 step with drag/SRP."""
-    global _CPP_SINGLE_ENABLED
-    if _CPP_SINGLE_ENABLED:
+    if _HAS_CPP:
         try:
             return list(_physics.Propagator().propagate_with_drag(
                 state, dt_seconds, area, mass, cd, cr, mjd0))
         except Exception as e:
-            _CPP_SINGLE_ENABLED = False
-            logger.warning(f"C++ propagate_with_drag failed: {e}. Disabling C++ single propagation for this process.")
+            logger.warning(f"C++ propagate_with_drag failed: {e}")
     return list(rk4_step(tuple(state), dt_seconds, mjd0, 0, area, mass, cd, cr))
 
 
@@ -123,14 +95,12 @@ def propagate_steps(state: list, total_seconds: float,
                      area: float = 0.0, mass: float = 1.0, cd: float = 2.2, cr: float = 1.5,
                      with_drag: bool = False, mjd0: float = 0.0) -> list:
     """Propagate a single satellite for a total time window, returning final state."""
-    global _CPP_SINGLE_ENABLED
-    if _CPP_SINGLE_ENABLED:
+    if _HAS_CPP:
         try:
             return list(_physics.Propagator().propagate_steps(
                 state, total_seconds, step_size, area, mass, cd, cr, with_drag, mjd0))
         except Exception as e:
-            _CPP_SINGLE_ENABLED = False
-            logger.warning(f"C++ propagate_steps failed: {e}. Disabling C++ single propagation for this process.")
+            logger.warning(f"C++ propagate_steps failed: {e}")
     curr = tuple(state)
     rem = total_seconds
     steps_taken = 0
@@ -142,8 +112,6 @@ def propagate_steps(state: list, total_seconds: float,
     return list(curr)
 
 
-# ── Batch propagation (N satellites) ─────────────────────────────────────────
-
 def propagate_batch(states: list, dt_seconds: float, steps: int,
                      area: float = 0.0, mass: float = 1.0,
                      cd: float = 2.2, cr: float = 1.5, with_drag: bool = False,
@@ -151,12 +119,9 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
     """
     Propagate N satellites for `steps` RK4 steps.
     """
-    # Convert input list to NumPy array once
     arr = np.array(states, dtype=np.float64)
 
-    # ── CUDA GPU ──────────────────────────────────────────────────────────────
-    global _CUDA_BATCH_ENABLED, _CPP_BATCH_ENABLED
-    if _CUDA_BATCH_ENABLED:
+    if _HAS_CUDA:
         try:
             if with_drag:
                 res = _physics.cuda_propagate_batch_drag(arr, dt_seconds, steps, area, mass, cd, cr, mjd0)
@@ -164,11 +129,9 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
                 res = _physics.cuda_propagate_batch(arr, dt_seconds, steps, mjd0)
             return res.tolist()
         except Exception as e:
-            _CUDA_BATCH_ENABLED = False
-            logger.warning(f"CUDA propagate_batch failed: {e}. Disabling CUDA batch propagation for this process.")
+            logger.warning(f"CUDA propagate_batch failed: {e}")
 
-    # ── C++ batch (GIL-released, optionally OpenMP) ───────────────────────────
-    if _CPP_BATCH_ENABLED:
+    if _HAS_BATCH_CPP:
         try:
             prop = _physics.Propagator()
             if with_drag:
@@ -177,40 +140,35 @@ def propagate_batch(states: list, dt_seconds: float, steps: int,
                 res = prop.batch_propagate_steps(arr, dt_seconds, steps, mjd0)
             return res.tolist()
         except Exception as e:
-            _CPP_BATCH_ENABLED = False
-            logger.warning(f"C++ batch_propagate_steps failed: {e}. Disabling C++ batch propagation for this process.")
+            logger.warning(f"C++ batch_propagate_steps failed: {e}")
 
-    # ── NumPy vectorized fallback ─────────────────────────────────────────────
     return propagate_batch_numpy(states, dt_seconds, steps,
                                   area, mass, cd, cr, with_drag, mjd0)
 
 
 def propagate_batch_full_history(states: list, dt_seconds: float, steps: int,
-                                 area: float = 0.0, mass: float = 1.0,
-                                 cd: float = 2.2, cr: float = 1.5, with_drag: bool = False,
-                                 mjd0: float = 0.0) -> np.ndarray:
+                                  area: float = 0.0, mass: float = 1.0,
+                                  cd: float = 2.2, cr: float = 1.5, with_drag: bool = False,
+                                  mjd0: float = 0.0) -> np.ndarray:
     """
     Propagate N satellites for `steps` steps and return the ENTIRE history.
     Returns: NumPy array of shape (steps + 1, N, 6)
     """
     arr = np.array(states, dtype=np.float64)
-    
-    global _CUDA_HISTORY_ENABLED, _CPP_HISTORY_ENABLED
-    if _CUDA_HISTORY_ENABLED:
+
+    if _HAS_CUDA:
         try:
             return _physics.cuda_propagate_full_history(arr, dt_seconds, steps, area, mass, cd, cr, with_drag, mjd0)
         except Exception as e:
-            _CUDA_HISTORY_ENABLED = False
-            logger.warning(f"CUDA propagate_full_history failed: {e}. Disabling CUDA history propagation for this process.")
-    
-    if _CPP_HISTORY_ENABLED:
+            logger.warning(f"CUDA propagate_full_history failed: {e}")
+
+    if _HAS_BATCH_CPP:
         try:
             return _physics.Propagator().batch_propagate_full_history(arr, dt_seconds, steps, area, mass, cd, cr, with_drag, mjd0)
         except Exception as e:
-            _CPP_HISTORY_ENABLED = False
-            logger.warning(f"C++ batch_propagate_full_history failed: {e}. Disabling C++ history propagation for this process.")
-        
-    # Fallback (slow)
+            logger.warning(f"C++ batch_propagate_full_history failed: {e}")
+
+    # Fallback
     n = len(states)
     history = np.zeros((steps + 1, n, 6))
     history[0] = arr
@@ -222,8 +180,6 @@ def propagate_batch_full_history(states: list, dt_seconds: float, steps: int,
     return history
 
 
-# ── Conjunction detection ─────────────────────────────────────────────────────
-
 def detect_conjunctions(sat_states: list, debris_states: list,
                          lookahead: float = 86400.0,
                          step_s: float = 60.0,
@@ -231,27 +187,23 @@ def detect_conjunctions(sat_states: list, debris_states: list,
     """
     All-pairs conjunction screening.
     """
-    global _CUDA_CONJUNCTION_ENABLED, _CPP_CONJUNCTION_ENABLED
-    if _CUDA_CONJUNCTION_ENABLED:
+    if _HAS_CUDA and hasattr(_physics, "cuda_detect_conjunctions"):
         try:
             s_arr = np.array(sat_states, dtype=np.float64)
             d_arr = np.array(debris_states, dtype=np.float64)
             return _physics.cuda_detect_conjunctions(s_arr, d_arr, lookahead, step_s, mjd0)
         except Exception as e:
-            _CUDA_CONJUNCTION_ENABLED = False
-            logger.warning(f"CUDA detect_conjunctions failed: {e}. Disabling CUDA conjunction detection for this process.")
+            logger.warning(f"CUDA detect_conjunctions failed: {e}")
 
-    if _CPP_CONJUNCTION_ENABLED:
+    if _HAS_CPP:
         try:
             s_arr = np.array(sat_states, dtype=np.float64)
             d_arr = np.array(debris_states, dtype=np.float64)
             return _physics.ConjunctionDetector().detect(s_arr, d_arr, lookahead, step_s)
         except Exception as e:
-            _CPP_CONJUNCTION_ENABLED = False
-            logger.warning(f"C++ detect_conjunctions failed: {e}. Disabling C++ conjunction detection for this process.")
+            logger.warning(f"C++ detect_conjunctions failed: {e}")
 
     from .conjunction import ConjunctionDetector as PyConjunctionDetector
     detector = PyConjunctionDetector()
     return detector.detect(sat_states, debris_states,
                             lookahead_s=lookahead, step_s=step_s, mjd0=mjd0)
-

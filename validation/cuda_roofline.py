@@ -1,20 +1,4 @@
-"""
-validation/cuda_roofline.py — Roofline Model for the CUDA Propagation Kernel
-=============================================================================
-Parses Nsight Compute (ncu) metrics to compute arithmetic intensity and
-plots the kernel's location on the roofline model for the RTX 2050.
-
-Usage (requires ncu — may need sudo):
-    sudo ncu --metrics sm__sass_thread_inst_executed_op_dfma_pred_on.sum,\
-dram__bytes_read.sum,dram__bytes_write.sum \
-        --csv python validation/cuda_roofline.py --ncu-mode \
-        > validation/ncu_output.csv
-
-    python validation/cuda_roofline.py
-
-If ncu is not run, the script uses hardcoded RTX 2050 roofline limits and
-plots a representative marker based on theoretical kernel analysis.
-"""
+"""Roofline model for the CUDA kernel, uses ncu metrics or theoretical values."""
 
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -39,22 +23,16 @@ STYLE = {
 }
 plt.rcParams.update(STYLE)
 
-# RTX 2050 (SM 8.6) hardware limits — from NVIDIA Ampere Architecture Whitepaper
-RTX2050_BW_GBS    = 192.0    # GB/s peak memory bandwidth (RTX 2050 mobile)
-RTX2050_FP64_TFLOPS = 0.2    # TFLOPs FP64  (RTX 2050 is 1/32 FP64 rate)
-RTX2050_FP32_TFLOPS = 6.4    # TFLOPs FP32
+RTX2050_BW_GBS    = 192.0
+RTX2050_FP64_TFLOPS = 0.2
+RTX2050_FP32_TFLOPS = 6.4
 
-# Roofline limits in GFLOPS/s and GB/s
-PEAK_BW   = RTX2050_BW_GBS        # GB/s
-PEAK_FP64 = RTX2050_FP64_TFLOPS * 1000  # GFLOPS/s
+PEAK_BW   = RTX2050_BW_GBS
+PEAK_FP64 = RTX2050_FP64_TFLOPS * 1000
 
 
 def run_ncu_and_collect(n: int = 2000):
-    """
-    Run the main cuda_propagate_batch kernel under Nsight Compute CLI and
-    collect FLOP and memory byte counts. Writes ncu_output.csv.
-    Requires 'ncu' binary on PATH and appropriate permissions.
-    """
+    """Run cuda_propagate_batch under ncu and collect FLOP/byte counts."""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "cpp", "build"))
     # Build a tiny driver script
     driver = os.path.join(os.path.dirname(__file__), "_ncu_driver.py")
@@ -111,23 +89,12 @@ def parse_ncu_csv(csv_text: str):
 
 def plot_roofline(ai: float, achieved_gflops: float | None, label: str,
                   has_ncu_data: bool = False, estimated_ceiling_gflops: float | None = None):
-    """
-    Plot the Roofline model for RTX 2050.
-    ai = arithmetic intensity [FLOP/byte]
-    achieved_gflops = measured performance [GFLOPS/s], or None if unavailable
-    """
+    """Plot the RTX 2050 roofline model with measured or theoretical kernel marker."""
     ai_range = np.logspace(-2, 4, 500)
 
-    # Memory-bound roof: Performance = BW × AI
-    mem_roof = PEAK_BW * ai_range  # GFLOPS/s
-
-    # Compute-bound roof: flat line at PEAK_FP64
+    mem_roof = PEAK_BW * ai_range
     compute_roof = np.full_like(ai_range, PEAK_FP64)
-
-    # Actual roofline = min(mem_roof, compute_roof)
     roofline = np.minimum(mem_roof, compute_roof)
-
-    # Ridge point (transition from memory-bound to compute-bound)
     ai_ridge = PEAK_FP64 / PEAK_BW
 
     fig, ax = plt.subplots(figsize=(10, 6))

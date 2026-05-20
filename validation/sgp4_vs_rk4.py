@@ -1,21 +1,4 @@
-"""
-validation/sgp4_vs_rk4.py — Accuracy Quantification Research
-=============================================================
-This script quantifies the divergence between SGP4 (analytical) and 
-Astrosis RK4 (numerical high-fidelity). 
-
-Research Question: How much does including SRP and Lunisolar perturbations 
-change the predicted trajectory compared to the simplified SGP4 model?
-
-Workload:
-1. Initialize ISS from TLE at epoch.
-2. Propagate for 72 hours using:
-   - SGP4 (Standard analytical)
-   - Astrosis RK4 (Gravity only)
-   - Astrosis RK4 (Gravity + Drag)
-   - Astrosis RK4 (Gravity + Drag + SRP + Lunisolar)
-3. Plot position divergence over time.
-"""
+"""Compare SGP4 vs RK4 position divergence over 72 hours (gravity, drag, full)."""
 
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -26,12 +9,10 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from sgp4.api import Satrec, jday
 from engine.core.propagator import rk4_step
-from engine.geo.analysis import _teme_to_eci
-from engine.constants import RE
+from engine.geo.frames import teme_to_eci
+from engine.constants import RE, ISS_LINE1, ISS_LINE2
 
-# ISS TLE (May 2025)
-ISS_LINE1 = "1 25544U 98067A   25135.54166667  .00007700  00000+0  14217-3 0  9994"
-ISS_LINE2 = "2 25544  51.6412 227.8960 0002170 183.9820 176.1230 15.49534348505800"
+# ISS TLE imported from engine.constants
 
 def run_research():
     print("Running SGP4 vs RK4 Research Comparison...")
@@ -45,7 +26,7 @@ def run_research():
     
     # Initial State at Epoch (from SGP4)
     _, r0_teme, v0_teme = satrec.sgp4(jd, jdf)
-    r0_eci, v0_eci = _teme_to_eci(np.array(r0_teme), np.array(v0_teme), epoch_dt)
+    r0_eci, v0_eci = teme_to_eci(np.array(r0_teme), np.array(v0_teme), epoch_dt)
     state0 = tuple(list(r0_eci) + list(v0_eci))
     
     dt = 60.0  # 1 minute steps
@@ -72,7 +53,7 @@ def run_research():
         jd2, jdf2 = jday(step_dt.year, step_dt.month, step_dt.day,
                          step_dt.hour, step_dt.minute, step_dt.second)
         _, r_sgp4, v_sgp4 = satrec.sgp4(jd2, jdf2)
-        r_ref, _ = _teme_to_eci(np.array(r_sgp4), np.array(v_sgp4), step_dt)
+        r_ref, _ = teme_to_eci(np.array(r_sgp4), np.array(v_sgp4), step_dt)
         
         # 2. Astrosis RK4 - Gravity only
         curr_grav = rk4_step(curr_grav, dt, mjd0=0.0)

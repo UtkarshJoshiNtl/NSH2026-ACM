@@ -1,8 +1,4 @@
-"""
-Astrosis — GPU-Accelerated Orbital Propagation and Conjunction Analysis Engine
-================================================================================
-Entry point for the CLI.
-"""
+"""CLI entry point."""
 
 from engine.cli import main
 
